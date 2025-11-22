@@ -85,14 +85,14 @@ cd my-awesome-project
 # Update module name in go.mod to your own
 # e.g., change "github.com/tonymmm1/go-htmx" to "github.com/yourname/my-awesome-project"
 
-# Update import paths in src/**/*.go files to match your new module name
-
-# Run setup
+# Run setup (automatically fixes all import paths!)
 make setup
 
 # Start coding!
 make dev
 ```
+
+**Note:** The `setup` script automatically detects your module path from `go.mod` and updates all imports in your code. No manual find/replace needed!
 
 ## Project Structure
 

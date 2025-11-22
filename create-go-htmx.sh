@@ -79,10 +79,12 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS
     sed -i '' "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" go.mod
     find src -type f -name "*.go" -exec sed -i '' "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" {} +
+    find templates -type f -name "*.templ" -exec sed -i '' "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" {} +
 else
     # Linux
     sed -i "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" go.mod
     find src -type f -name "*.go" -exec sed -i "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" {} +
+    find templates -type f -name "*.templ" -exec sed -i "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" {} +
 fi
 
 # Initialize git

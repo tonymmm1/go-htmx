@@ -55,6 +55,33 @@ echo -e "${GREEN}✓ make${NC}"
 
 echo ""
 
+# Fix module paths
+echo -e "${BLUE}Checking module paths...${NC}"
+CURRENT_MODULE=$(grep '^module ' go.mod | awk '{print $2}')
+TEMPLATE_MODULE="github.com/tonymmm1/go-htmx"
+
+if [ "$CURRENT_MODULE" != "$TEMPLATE_MODULE" ]; then
+    echo -e "${YELLOW}Current module: $CURRENT_MODULE${NC}"
+    echo -e "${YELLOW}Updating import paths from $TEMPLATE_MODULE...${NC}"
+    
+    # Update all .go files
+    find src -type f -name "*.go" -exec sed -i "s|$TEMPLATE_MODULE|$CURRENT_MODULE|g" {} +
+    
+    # Update all .templ files
+    find templates -type f -name "*.templ" -exec sed -i "s|$TEMPLATE_MODULE|$CURRENT_MODULE|g" {} +
+    
+    echo -e "${GREEN}✓ Import paths updated to $CURRENT_MODULE${NC}"
+    
+    # Run go mod tidy to fix dependencies
+    echo -e "${BLUE}Running go mod tidy...${NC}"
+    go mod tidy
+    echo -e "${GREEN}✓ Dependencies updated${NC}"
+else
+    echo -e "${GREEN}✓ Module paths are correct${NC}"
+fi
+
+echo ""
+
 # Create .env if it doesn't exist
 if [ ! -f .env ]; then
     echo -e "${BLUE}Creating .env file...${NC}"
