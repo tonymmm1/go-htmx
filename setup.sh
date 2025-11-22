@@ -71,11 +71,6 @@ if [ "$CURRENT_MODULE" != "$TEMPLATE_MODULE" ]; then
     find templates -type f -name "*.templ" -exec sed -i "s|$TEMPLATE_MODULE|$CURRENT_MODULE|g" {} +
     
     echo -e "${GREEN}✓ Import paths updated to $CURRENT_MODULE${NC}"
-    
-    # Run go mod tidy to fix dependencies
-    echo -e "${BLUE}Running go mod tidy...${NC}"
-    go mod tidy
-    echo -e "${GREEN}✓ Dependencies updated${NC}"
 else
     echo -e "${GREEN}✓ Module paths are correct${NC}"
 fi
@@ -91,18 +86,32 @@ else
     echo -e "${YELLOW}⚠ .env file already exists, skipping${NC}"
 fi
 
-# Install Go dependencies
-echo ""
-echo -e "${BLUE}Installing Go dependencies...${NC}"
-go mod download
-echo -e "${GREEN}✓ Go dependencies installed${NC}"
-
-# Install Go tools
+# Install Go tools FIRST (needed for templ generate)
 echo ""
 echo -e "${BLUE}Installing Go tools (air, templ)...${NC}"
 go install github.com/air-verse/air@latest
 go install github.com/a-h/templ/cmd/templ@latest
 echo -e "${GREEN}✓ Go tools installed${NC}"
+
+# Generate templ files BEFORE go mod tidy
+echo ""
+echo -e "${BLUE}Generating Templ files...${NC}"
+templ generate
+echo -e "${GREEN}✓ Templ files generated${NC}"
+
+# NOW run go mod tidy (after templ files exist)
+if [ "$CURRENT_MODULE" != "$TEMPLATE_MODULE" ]; then
+    echo ""
+    echo -e "${BLUE}Running go mod tidy...${NC}"
+    go mod tidy
+    echo -e "${GREEN}✓ Dependencies updated${NC}"
+fi
+
+# Install Go dependencies
+echo ""
+echo -e "${BLUE}Installing Go dependencies...${NC}"
+go mod download
+echo -e "${GREEN}✓ Go dependencies installed${NC}"
 
 # Install npm dependencies
 echo ""
@@ -115,12 +124,6 @@ echo ""
 echo -e "${BLUE}Creating necessary directories...${NC}"
 mkdir -p static/css static/images/icons static/images/logos tmp
 echo -e "${GREEN}✓ Directories created${NC}"
-
-# Generate initial templ files
-echo ""
-echo -e "${BLUE}Generating Templ files...${NC}"
-templ generate
-echo -e "${GREEN}✓ Templ files generated${NC}"
 
 # Build initial CSS
 echo ""
