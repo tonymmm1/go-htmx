@@ -19,10 +19,12 @@ echo "Creating new page: $PAGE_NAME_TITLE"
 
 # Create templ file
 cat > "templates/pages/${PAGE_NAME_LOWER}.templ" << EOF
-package pages
+package pagetemplates
+
+import "github.com/tonymmm1/go-htmx/templates/layouts"
 
 templ ${PAGE_NAME_TITLE}() {
-	@Layout() {
+	@layouts.Layout() {
 		<div class="container mx-auto px-4 py-8">
 			<div class="prose lg:prose-xl mx-auto">
 				<h1>${PAGE_NAME_TITLE}</h1>
@@ -42,7 +44,7 @@ echo "✓ Created templates/pages/${PAGE_NAME_LOWER}.templ"
 cat >> "src/pages/pages.go" << EOF
 
 func (h *Handler) Handle${PAGE_NAME_TITLE}(w http.ResponseWriter, r *http.Request) {
-	component := ${PAGE_NAME_TITLE}()
+	component := pagetemplates.${PAGE_NAME_TITLE}()
 	component.Render(r.Context(), w)
 }
 EOF

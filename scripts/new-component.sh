@@ -21,6 +21,8 @@ echo "Creating new component: $COMPONENT_NAME_TITLE"
 cat > "templates/components/${COMPONENT_NAME_LOWER}.templ" << EOF
 package components
 
+import "github.com/tonymmm1/go-htmx/templates/layouts"
+
 templ ${COMPONENT_NAME_TITLE}(title string) {
 	<div class="card bg-base-100 shadow-xl">
 		<div class="card-body">
@@ -33,7 +35,8 @@ EOF
 
 echo "✓ Created templates/components/${COMPONENT_NAME_LOWER}.templ"
 echo ""
-echo "You can now use this component in your pages:"
+echo "Import and use this component in your templates:"
+echo "  import \"github.com/tonymmm1/go-htmx/templates/components\""
 echo "  @components.${COMPONENT_NAME_TITLE}(\"My Title\")"
 echo ""
 echo "Don't forget to run: templ generate"

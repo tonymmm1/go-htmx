@@ -106,7 +106,7 @@ make dev
 │   ├── middleware/
 │   │   └── middleware.go     # HTTP middleware stack
 │   ├── pages/
-│   │   └── pages.go          # Page handlers
+│   │   └── pages.go          # Page handlers (controllers)
 │   ├── server/
 │   │   └── server.go         # HTTP server setup
 │   └── styles/
@@ -177,7 +177,7 @@ make new-page contact
 ```
 
 This creates:
-- ✅ `templates/pages/contact.templ` - The template file
+- ✅ `src/pages/contact.templ` - The template file
 - ✅ Handler function in `src/pages/pages.go`
 - ✅ Instructions for adding the route
 
@@ -197,15 +197,16 @@ func RegisterPageRoutes(h *Handler, r chi.Router) {
 make new-component card
 ```
 
-Use components in your pages:
+Use components in your templates:
 
 ```templ
-package pages
+package pagetemplates
 
-import "github.com/tonymmm1/go-htmx/src/components"
+import "github.com/tonymmm1/go-htmx/templates/layouts"
+import "github.com/tonymmm1/go-htmx/templates/components"
 
 templ MyPage() {
-    @Layout() {
+    @layouts.Layout() {
         <div>
             @components.Card("My Card Title")
         </div>
