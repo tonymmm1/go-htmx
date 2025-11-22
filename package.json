@@ -1,0 +1,14 @@
+{
+    "name": "go-htmx",
+    "version": "1.0.0",
+    "description": "Go-HTMX starter template",
+    "scripts": {
+        "dev": "make dev",
+        "build": "make build"
+    },
+    "devDependencies": {
+        "tailwindcss": "^3.4.0",
+        "daisyui": "^4.12.0",
+        "concurrently": "^8.2.0"
+    }
+}

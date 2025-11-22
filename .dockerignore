@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+COMPARISON.md
+QUICKSTART.md
+LICENSE
+
+# CI/CD
+.github
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Dependencies (will be installed in container)
+node_modules
+vendor
+
+# Build artifacts
+bin
+tmp
+*.log
+
+# Generated files (will be generated in container)
+static/css
+*_templ.go
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scripts not needed in container
+create-go-htmx.sh
+setup.sh
+
