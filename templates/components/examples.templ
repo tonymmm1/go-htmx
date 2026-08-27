@@ -1,0 +1,44 @@
+package components
+
+import "strconv"
+
+templ ServerTime(value string) {
+	<p class="text-lg" aria-live="polite">
+		Server rendered this at
+		<time class="font-mono font-semibold text-primary">{ value }</time>.
+	</p>
+}
+
+templ SearchResults(query string, results []string) {
+	<div id="search-results" class="mt-4 min-h-24" aria-live="polite">
+		if query == "" {
+			<p class="text-base-content/60">Start typing to filter the example stack.</p>
+		} else if len(results) == 0 {
+			<div class="alert">
+				<span>No matches for <strong>{ query }</strong>.</span>
+			</div>
+		} else {
+			<ul class="menu rounded-box bg-base-200">
+				for _, result := range results {
+					<li><span>{ result }</span></li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+templ Counter(count int) {
+	<form
+		id="counter-demo"
+		class="flex flex-wrap items-center gap-3"
+		hx-post="/examples/counter"
+		hx-target="#counter-demo"
+		hx-swap="outerHTML"
+	>
+		<input type="hidden" name="count" value={ strconv.Itoa(count) }/>
+		<button class="btn btn-circle" type="submit" name="action" value="decrement" aria-label="Decrease counter">−</button>
+		<output class="min-w-16 text-center font-mono text-4xl font-bold">{ strconv.Itoa(count) }</output>
+		<button class="btn btn-circle btn-primary" type="submit" name="action" value="increment" aria-label="Increase counter">+</button>
+		<button class="btn btn-ghost btn-sm" type="submit" name="action" value="reset">Reset</button>
+	</form>
+}

@@ -1,34 +1,73 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Script to generate a new page quickly
-# Usage: bash scripts/new-page.sh pagename
+# Generate a page, handler, and route.
+# Usage: bash scripts/new-page.sh contact-us
 
-set -e
+set -euo pipefail
 
-if [ -z "$1" ]; then
-    echo "Usage: bash scripts/new-page.sh <pagename>"
-    echo "Example: bash scripts/new-page.sh contact"
+readonly PAGE_NAME="${1:-}"
+if [[ -z "$PAGE_NAME" ]]; then
+    echo "Usage: bash scripts/new-page.sh <page-name>"
+    echo "Example: bash scripts/new-page.sh contact-us"
     exit 1
 fi
 
-PAGE_NAME=$1
-PAGE_NAME_LOWER=$(echo "$PAGE_NAME" | tr '[:upper:]' '[:lower:]')
-PAGE_NAME_TITLE=$(echo "$PAGE_NAME" | sed 's/.*/\u&/')
+if [[ ! "$PAGE_NAME" =~ ^[a-zA-Z][a-zA-Z0-9]*([_-][a-zA-Z0-9]+)*$ ]]; then
+    echo "Error: page name must start with a letter and contain only letters, numbers, hyphens, or underscores."
+    exit 1
+fi
 
-echo "Creating new page: $PAGE_NAME_TITLE"
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
 
-# Create templ file
-cat > "templates/pages/${PAGE_NAME_LOWER}.templ" << EOF
+readonly MODULE_PATH="$(awk '$1 == "module" { gsub(/"/, "", $2); print $2; exit }' go.mod)"
+if [[ -z "$MODULE_PATH" ]]; then
+    echo "Error: could not determine the module path from go.mod."
+    exit 1
+fi
+
+readonly PAGE_SLUG="$(printf '%s' "$PAGE_NAME" | tr '[:upper:]_' '[:lower:]-')"
+readonly PAGE_COMPONENT="$(printf '%s\n' "$PAGE_NAME" | awk -F '[-_]' '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2); print "" }')"
+readonly TEMPLATE_FILE="templates/pages/${PAGE_SLUG}.templ"
+readonly HANDLERS_FILE="src/pages/pages.go"
+readonly HANDLERS_TMP="${HANDLERS_FILE}.tmp"
+readonly TEMPLATE_TMP="${TEMPLATE_FILE}.tmp"
+
+if [[ -e "$TEMPLATE_FILE" ]]; then
+    echo "Error: $TEMPLATE_FILE already exists."
+    exit 1
+fi
+
+if grep -Fq "Handle${PAGE_COMPONENT}" "$HANDLERS_FILE"; then
+    echo "Error: handler Handle${PAGE_COMPONENT} already exists."
+    exit 1
+fi
+
+if grep -Fq "r.Get(\"/${PAGE_SLUG}\"" "$HANDLERS_FILE"; then
+    echo "Error: route /${PAGE_SLUG} already exists."
+    exit 1
+fi
+
+if ! grep -Fq "// scaffold:routes" "$HANDLERS_FILE"; then
+    echo "Error: route marker not found in $HANDLERS_FILE."
+    exit 1
+fi
+
+trap 'rm -f -- "$HANDLERS_TMP" "$TEMPLATE_TMP"' EXIT
+mkdir -p templates/pages
+
+cat > "$TEMPLATE_TMP" <<EOF
 package pagetemplates
 
-import "github.com/tonymmm1/go-htmx/templates/layouts"
+import "$MODULE_PATH/templates/layouts"
 
-templ ${PAGE_NAME_TITLE}() {
+templ ${PAGE_COMPONENT}() {
 	@layouts.Layout() {
 		<div class="container mx-auto px-4 py-8">
 			<div class="prose lg:prose-xl mx-auto">
-				<h1>${PAGE_NAME_TITLE}</h1>
-				<p>Welcome to the ${PAGE_NAME_TITLE} page.</p>
+				<h1>${PAGE_COMPONENT}</h1>
+				<p>Welcome to the ${PAGE_COMPONENT} page.</p>
 				<div class="mt-8">
 					<a href="/" class="btn btn-primary">Back to Home</a>
 				</div>
@@ -38,24 +77,23 @@ templ ${PAGE_NAME_TITLE}() {
 }
 EOF
 
-echo "✓ Created templates/pages/${PAGE_NAME_LOWER}.templ"
+awk -v route="r.Get(\"/${PAGE_SLUG}\", h.Handle${PAGE_COMPONENT})" '
+    /\/\/ scaffold:routes/ { print "\t" route }
+    { print }
+' "$HANDLERS_FILE" > "$HANDLERS_TMP"
 
-# Add handler to pages.go
-cat >> "src/pages/pages.go" << EOF
+cat >> "$HANDLERS_TMP" <<EOF
 
-func (h *Handler) Handle${PAGE_NAME_TITLE}(w http.ResponseWriter, r *http.Request) {
-	component := pagetemplates.${PAGE_NAME_TITLE}()
-	component.Render(r.Context(), w)
+func (h *Handler) Handle${PAGE_COMPONENT}(w http.ResponseWriter, r *http.Request) {
+	render(w, r, pagetemplates.${PAGE_COMPONENT}())
 }
 EOF
 
-echo "✓ Added handler to src/pages/pages.go"
+mv -- "$TEMPLATE_TMP" "$TEMPLATE_FILE"
+mv -- "$HANDLERS_TMP" "$HANDLERS_FILE"
+gofmt -w "$HANDLERS_FILE"
+trap - EXIT
 
-# Instructions for adding route
-echo ""
-echo "To complete setup, add this route to RegisterPageRoutes in src/pages/pages.go:"
-echo "  r.Get(\"/${PAGE_NAME_LOWER}\", h.Handle${PAGE_NAME_TITLE})"
-echo ""
-echo "Then run: templ generate"
-echo ""
-
+echo "Created $TEMPLATE_FILE"
+echo "Added /${PAGE_SLUG} and Handle${PAGE_COMPONENT} to $HANDLERS_FILE"
+echo "Run 'templ generate' (or leave 'make dev' running) to generate the Go template."

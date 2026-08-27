@@ -9,4 +9,14 @@
     themes: light --default, dark --prefersdark, cupcake;
 }
 
+.htmx-indicator {
+    opacity: 0;
+    transition: opacity 150ms ease-in;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    opacity: 1;
+}
+
 /* Custom styles can go here */

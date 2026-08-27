@@ -77,11 +77,20 @@ if [ "$CURRENT_MODULE" != "$TEMPLATE_MODULE" ]; then
     echo -e "${YELLOW}Current module: $CURRENT_MODULE${NC}"
     echo -e "${YELLOW}Updating import paths from $TEMPLATE_MODULE...${NC}"
     
-    # Update all .go files
-    find src -type f -name "*.go" -exec sed -i "s|$TEMPLATE_MODULE|$CURRENT_MODULE|g" {} +
-    
-    # Update all .templ files
-    find templates -type f -name "*.templ" -exec sed -i "s|$TEMPLATE_MODULE|$CURRENT_MODULE|g" {} +
+    replace_module_path() {
+        local file="$1"
+        local temporary="${file}.module-update"
+        sed "s|$TEMPLATE_MODULE|$CURRENT_MODULE|g" "$file" > "$temporary"
+        mv "$temporary" "$file"
+    }
+
+    while IFS= read -r -d '' file; do
+        replace_module_path "$file"
+    done < <(find src -type f -name "*.go" -print0)
+
+    while IFS= read -r -d '' file; do
+        replace_module_path "$file"
+    done < <(find templates -type f -name "*.templ" -print0)
     
     echo -e "${GREEN}✓ Import paths updated to $CURRENT_MODULE${NC}"
 else

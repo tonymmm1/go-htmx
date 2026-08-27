@@ -6,7 +6,7 @@ CONTAINER ?= gohtmx-dev
 AIR_VERSION   ?= v1.67.4
 TEMPL_VERSION ?= v0.3.1020
 
-.PHONY: all dev build docker-build docker-up docker-down compose-up compose-dev compose-down clean tools deps setup new-page new-component
+.PHONY: all dev build docker-build docker-up docker-down compose-up compose-dev compose-down clean tools deps setup new-page new-component test test-generators
 
 all: dev
 
@@ -99,6 +99,10 @@ clean-all: clean
 test:
 	@go test -v ./...
 
+# Verify generators still compile after a module rename
+test-generators:
+	@bash scripts/test-generators.sh
+
 # Generate a new page
 new-page:
 	@bash scripts/new-page.sh $(filter-out $@,$(MAKECMDGOALS))
@@ -135,6 +139,7 @@ help:
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  make test          - Run tests"
+	@echo "  make test-generators - Smoke-test project generators"
 	@echo "  make clean         - Clean build artifacts"
 	@echo "  make clean-all     - Clean everything including dependencies"
 	@echo "  make tools         - Install required Go tools"

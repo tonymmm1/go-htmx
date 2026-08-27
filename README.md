@@ -38,6 +38,7 @@ A production-ready starter template for building modern web applications with Go
 ✅ Pre-configured middleware (CORS, rate limiting, security headers)  
 ✅ Docker support for production deployment  
 ✅ Beautiful default UI with DaisyUI components  
+✅ Working HTMX examples with fragment responses<br>
 ✅ HTTP/2 support  
 ✅ Production-ready project structure  
 ✅ GitHub Actions CI for tests, audits, and production builds
@@ -66,6 +67,8 @@ make dev
 ```
 
 That's it! Visit `http://localhost:8080` 🎉
+
+Open `http://localhost:8080/examples` to try the included HTMX interactions.
 
 The setup command will:
 - ✅ Check prerequisites (Go, Node.js, npm)
@@ -110,7 +113,8 @@ make dev
 │   ├── middleware/
 │   │   └── middleware.go     # HTTP middleware stack
 │   ├── pages/
-│   │   └── pages.go          # Page handlers (controllers)
+│   │   ├── pages.go          # Page and HTMX fragment handlers
+│   │   └── pages_test.go     # Handler examples and tests
 │   ├── server/
 │   │   └── server.go         # HTTP server setup
 │   └── styles/
@@ -120,8 +124,10 @@ make dev
 │   │   └── layout.templ      # Base layout template
 │   ├── pages/
 │   │   ├── index.templ       # Home page
-│   │   └── about.templ       # About page
-│   └── components/           # Reusable components
+│   │   ├── about.templ       # About page
+│   │   └── examples.templ    # Working HTMX demo page
+│   └── components/
+│       └── examples.templ    # HTMX response fragments
 ├── static/
 │   ├── css/                  # Generated CSS (auto-created)
 │   └── images/               # Static assets
@@ -179,20 +185,10 @@ Use the page generator (like Nuxt's page generation):
 make new-page contact
 ```
 
-This creates:
-- ✅ `src/pages/contact.templ` - The template file
-- ✅ Handler function in `src/pages/pages.go`
-- ✅ Instructions for adding the route
-
-Then just add the route in `src/pages/pages.go`:
-
-```go
-func RegisterPageRoutes(h *Handler, r chi.Router) {
-    r.Get("/", h.HandleIndex)
-    r.Get("/about", h.HandleAbout)
-    r.Get("/contact", h.HandleContact) // Add this
-}
-```
+This creates `templates/pages/contact.templ`, adds its handler, and registers
+`GET /contact`. Hyphenated names such as `contact-us` become the valid Templ
+component `ContactUs`, and generated imports always use the module from your
+project's `go.mod`.
 
 ### Creating Reusable Components
 
@@ -205,8 +201,8 @@ Use components in your templates:
 ```templ
 package pagetemplates
 
-import "github.com/tonymmm1/go-htmx/templates/layouts"
-import "github.com/tonymmm1/go-htmx/templates/components"
+import "your/module/templates/layouts"
+import "your/module/templates/components"
 
 templ MyPage() {
     @layouts.Layout() {
@@ -216,6 +212,18 @@ templ MyPage() {
     }
 }
 ```
+
+### Learning from the HTMX Examples
+
+Visit `/examples` for three small, working patterns:
+
+- `hx-get` replaces a target with a server-rendered time fragment.
+- A debounced search sends its input value and swaps the result list.
+- `hx-post` submits a counter form and replaces the complete component.
+
+The browser markup lives in `templates/pages/examples.templ`, reusable response
+fragments live in `templates/components/examples.templ`, and the Go handlers are
+in `src/pages/pages.go`.
 
 ### Customizing Middleware
 

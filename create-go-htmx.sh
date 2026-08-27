@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # create-go-htmx: Scaffold a new go-htmx project
-# Usage: bash create-go-htmx.sh [project-name]
-# Or: curl -sSL <url> | bash -s my-project
+# Usage: bash create-go-htmx.sh [project-name] [module-path]
+# Or: curl -sSL <url> | bash -s -- my-project github.com/you/my-project
 
 set -e
 
@@ -53,9 +53,16 @@ if [ -d "$PROJECT_NAME" ]; then
     exit 1
 fi
 
-# Get module path
-echo -e "${YELLOW}Enter Go module path (e.g., github.com/username/$PROJECT_NAME):${NC}"
-read -r MODULE_PATH
+# Get module path. A piped script cannot safely prompt on standard input, so it
+# accepts the module as its second argument and otherwise uses a sensible default.
+if [ -n "${2:-}" ]; then
+    MODULE_PATH="$2"
+elif [ -t 0 ]; then
+    echo -e "${YELLOW}Enter Go module path (e.g., github.com/username/$PROJECT_NAME):${NC}"
+    read -r MODULE_PATH
+else
+    MODULE_PATH=""
+fi
 
 if [ -z "$MODULE_PATH" ]; then
     MODULE_PATH="github.com/$(whoami)/$PROJECT_NAME"
@@ -119,4 +126,3 @@ echo -e "  ${GREEN}http://localhost:8080${NC}"
 echo ""
 echo -e "${BLUE}Happy coding! 🚀${NC}"
 echo ""
-

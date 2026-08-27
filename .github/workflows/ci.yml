@@ -54,6 +54,9 @@ jobs:
       - name: Test Go code
         run: go test ./...
 
+      - name: Test project generators
+        run: bash scripts/test-generators.sh
+
       - name: Build application
         run: go build -trimpath -o bin/server ./src/cmd/main.go
 

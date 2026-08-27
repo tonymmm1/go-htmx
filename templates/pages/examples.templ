@@ -1,0 +1,98 @@
+package pagetemplates
+
+import (
+	"github.com/tonymmm1/go-htmx/templates/components"
+	"github.com/tonymmm1/go-htmx/templates/layouts"
+)
+
+templ Examples() {
+	@layouts.Layout() {
+		<div class="min-h-screen bg-base-200 px-4 py-12">
+			<div class="mx-auto max-w-5xl">
+				<div class="mb-10 max-w-3xl">
+					<div class="badge badge-primary badge-outline mb-4">Working examples</div>
+					<h1 class="text-4xl font-bold sm:text-5xl">HTMX, served by Go</h1>
+					<p class="mt-4 text-lg text-base-content/70">
+						Each interaction below calls a Chi handler that renders a small Templ fragment—no custom JavaScript required.
+					</p>
+				</div>
+				<div class="grid gap-6 lg:grid-cols-2">
+					<section class="card bg-base-100 shadow-xl">
+						<div class="card-body">
+							<div class="flex items-start justify-between gap-4">
+								<div>
+									<h2 class="card-title">Fragment request</h2>
+									<p class="text-base-content/70">Fetch server HTML and swap it into a target.</p>
+								</div>
+								<div class="badge badge-neutral">hx-get</div>
+							</div>
+							<div id="server-time" class="my-4 rounded-box bg-base-200 p-5">
+								<p class="text-base-content/60">Ask the server for its current time.</p>
+							</div>
+							<div class="card-actions items-center">
+								<button
+									class="btn btn-primary"
+									hx-get="/examples/time"
+									hx-target="#server-time"
+									hx-swap="innerHTML"
+									hx-indicator="#time-loading"
+								>
+									Get server time
+								</button>
+								<span id="time-loading" class="loading loading-spinner loading-sm htmx-indicator" aria-label="Loading"></span>
+							</div>
+						</div>
+					</section>
+					<section class="card bg-base-100 shadow-xl">
+						<div class="card-body">
+							<div class="flex items-start justify-between gap-4">
+								<div>
+									<h2 class="card-title">Server-side counter</h2>
+									<p class="text-base-content/70">POST a form and replace the returned component.</p>
+								</div>
+								<div class="badge badge-neutral">hx-post</div>
+							</div>
+							<div class="my-6">
+								@components.Counter(0)
+							</div>
+							<p class="text-sm text-base-content/50">The handler clamps the demo between −10 and 10.</p>
+						</div>
+					</section>
+					<section class="card bg-base-100 shadow-xl lg:col-span-2">
+						<div class="card-body">
+							<div class="flex flex-wrap items-start justify-between gap-4">
+								<div>
+									<h2 class="card-title">Debounced live search</h2>
+									<p class="text-base-content/70">Send the field value after typing pauses and swap only the results.</p>
+								</div>
+								<div class="badge badge-neutral">hx-trigger</div>
+							</div>
+							<label class="input input-bordered mt-4 flex items-center gap-2">
+								<span class="text-base-content/50">Search</span>
+								<input
+									id="example-search"
+									class="grow"
+									type="search"
+									name="q"
+									placeholder="Try Go, HTMX, Docker…"
+									autocomplete="off"
+									hx-get="/examples/search"
+									hx-trigger="input changed delay:300ms, search"
+									hx-target="#search-results"
+									hx-swap="outerHTML"
+									hx-sync="this:replace"
+									hx-indicator="#search-loading"
+								/>
+								<span id="search-loading" class="loading loading-spinner loading-sm htmx-indicator" aria-label="Loading"></span>
+							</label>
+							@components.SearchResults("", nil)
+						</div>
+					</section>
+				</div>
+				<div class="mt-8 text-center text-sm text-base-content/60">
+					Start with <code>templates/pages/examples.templ</code> and <code>src/pages/pages.go</code>, then replace these demos with your app.
+				</div>
+			</div>
+		</div>
+	}
+}

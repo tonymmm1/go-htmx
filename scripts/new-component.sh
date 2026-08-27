@@ -1,44 +1,63 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Script to generate a new reusable component
-# Usage: bash scripts/new-component.sh componentname
+# Generate a reusable Templ component.
+# Usage: bash scripts/new-component.sh feature-card
 
-set -e
+set -euo pipefail
 
-if [ -z "$1" ]; then
-    echo "Usage: bash scripts/new-component.sh <componentname>"
-    echo "Example: bash scripts/new-component.sh card"
+readonly COMPONENT_NAME="${1:-}"
+if [[ -z "$COMPONENT_NAME" ]]; then
+    echo "Usage: bash scripts/new-component.sh <component-name>"
+    echo "Example: bash scripts/new-component.sh feature-card"
     exit 1
 fi
 
-COMPONENT_NAME=$1
-COMPONENT_NAME_LOWER=$(echo "$COMPONENT_NAME" | tr '[:upper:]' '[:lower:]')
-COMPONENT_NAME_TITLE=$(echo "$COMPONENT_NAME" | sed 's/.*/\u&/')
+if [[ ! "$COMPONENT_NAME" =~ ^[a-zA-Z][a-zA-Z0-9]*([_-][a-zA-Z0-9]+)*$ ]]; then
+    echo "Error: component name must start with a letter and contain only letters, numbers, hyphens, or underscores."
+    exit 1
+fi
 
-echo "Creating new component: $COMPONENT_NAME_TITLE"
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
 
-# Create templ file
-cat > "templates/components/${COMPONENT_NAME_LOWER}.templ" << EOF
+readonly MODULE_PATH="$(awk '$1 == "module" { gsub(/"/, "", $2); print $2; exit }' go.mod)"
+if [[ -z "$MODULE_PATH" ]]; then
+    echo "Error: could not determine the module path from go.mod."
+    exit 1
+fi
+
+readonly COMPONENT_SLUG="$(printf '%s' "$COMPONENT_NAME" | tr '[:upper:]_' '[:lower:]-')"
+readonly COMPONENT_TYPE="$(printf '%s\n' "$COMPONENT_NAME" | awk -F '[-_]' '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2); print "" }')"
+readonly COMPONENT_FILE="templates/components/${COMPONENT_SLUG}.templ"
+readonly COMPONENT_TMP="${COMPONENT_FILE}.tmp"
+
+if [[ -e "$COMPONENT_FILE" ]]; then
+    echo "Error: $COMPONENT_FILE already exists."
+    exit 1
+fi
+
+trap 'rm -f -- "$COMPONENT_TMP"' EXIT
+mkdir -p templates/components
+
+cat > "$COMPONENT_TMP" <<EOF
 package components
 
-import "github.com/tonymmm1/go-htmx/templates/layouts"
-
-templ ${COMPONENT_NAME_TITLE}(title string) {
+templ ${COMPONENT_TYPE}(title string) {
 	<div class="card bg-base-100 shadow-xl">
 		<div class="card-body">
 			<h2 class="card-title">{ title }</h2>
-			<p>This is a reusable ${COMPONENT_NAME_TITLE} component.</p>
+			<p>This is a reusable ${COMPONENT_TYPE} component.</p>
 		</div>
 	</div>
 }
 EOF
 
-echo "✓ Created templates/components/${COMPONENT_NAME_LOWER}.templ"
-echo ""
-echo "Import and use this component in your templates:"
-echo "  import \"github.com/tonymmm1/go-htmx/templates/components\""
-echo "  @components.${COMPONENT_NAME_TITLE}(\"My Title\")"
-echo ""
-echo "Don't forget to run: templ generate"
-echo ""
+mv -- "$COMPONENT_TMP" "$COMPONENT_FILE"
+trap - EXIT
 
+echo "Created $COMPONENT_FILE"
+echo "Import and use it in a page:"
+echo "  import \"$MODULE_PATH/templates/components\""
+echo "  @components.${COMPONENT_TYPE}(\"My Title\")"
+echo "Run 'templ generate' (or leave 'make dev' running) to generate the Go template."

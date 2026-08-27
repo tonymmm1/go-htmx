@@ -6,10 +6,10 @@
 
 ```bash
 # Download and run the scaffolder
-curl -sSL https://raw.githubusercontent.com/tonymmm1/go-htmx/master/create-go-htmx.sh | bash -s my-project
+curl -sSL https://raw.githubusercontent.com/tonymmm1/go-htmx/main/create-go-htmx.sh | bash -s -- my-project github.com/yourname/my-project
 
 # Or download first, then run
-wget https://raw.githubusercontent.com/tonymmm1/go-htmx/master/create-go-htmx.sh
+wget https://raw.githubusercontent.com/tonymmm1/go-htmx/main/create-go-htmx.sh
 bash create-go-htmx.sh my-project
 ```
 
@@ -54,6 +54,9 @@ make dev
 
 Visit http://localhost:8080
 
+Visit http://localhost:8080/examples for working fragment GET, live-search, and
+form POST examples.
+
 ## Your First Changes
 
 ### Create a New Page
@@ -62,16 +65,8 @@ Visit http://localhost:8080
 make new-page pricing
 ```
 
-This creates `src/pages/pricing.templ` and adds the handler. Then add the route:
-
-```go
-// In src/pages/pages.go
-func RegisterPageRoutes(h *Handler, r chi.Router) {
-    r.Get("/", h.HandleIndex)
-    r.Get("/about", h.HandleAbout)
-    r.Get("/pricing", h.HandlePricing) // Add this
-}
-```
+This creates `templates/pages/pricing.templ`, adds the handler, and registers
+`GET /pricing` automatically.
 
 ### Create a Component
 
