@@ -1,5 +1,12 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+
+@source "../../templates";
+@source "../";
+
+@plugin "@tailwindcss/typography";
+
+@plugin "daisyui" {
+    themes: light --default, dark --prefersdark, cupcake;
+}
 
 /* Custom styles can go here */

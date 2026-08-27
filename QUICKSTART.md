@@ -87,15 +87,15 @@ Use it in your pages:
 
 ### Customize the Theme
 
-Edit `tailwind.config.js`:
+Edit the DaisyUI plugin block in `src/styles/input.css`:
 
-```javascript
-daisyui: {
-  themes: ["light", "dark", "cyberpunk"], // Choose your themes
+```css
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark, cyberpunk;
 }
 ```
 
-Change the theme in `src/pages/layout.templ`:
+Change the theme in `templates/layouts/layout.templ`:
 
 ```html
 <html lang="en" data-theme="cyberpunk">
@@ -159,4 +159,3 @@ make docker-up
 ```
 
 The binary is self-contained and includes all templates!
-

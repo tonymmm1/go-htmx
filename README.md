@@ -1,5 +1,7 @@
 # Go-HTMX Starter Template
 
+[![CI](https://github.com/tonymmm1/go-htmx/actions/workflows/ci.yml/badge.svg)](https://github.com/tonymmm1/go-htmx/actions/workflows/ci.yml)
+
 **The easiest way to start a Go + HTMX web application.** Just like `create-nuxt-app` or `create-react-app`, but for Go!
 
 A production-ready starter template for building modern web applications with Go, HTMX, Templ, and Tailwind CSS. This template provides a solid foundation with hot-reloading, type-safe templating, and beautiful UI components out of the box.
@@ -20,13 +22,14 @@ A production-ready starter template for building modern web applications with Go
 
 ## Tech Stack
 
-- **[Go](https://go.dev/)** - Fast, reliable backend language
+- **[Go](https://go.dev/)** 1.27 - Fast, reliable backend language
 - **[Chi Router](https://github.com/go-chi/chi)** - Lightweight, idiomatic HTTP router
-- **[HTMX](https://htmx.org/)** - Modern interactivity without JavaScript frameworks
-- **[Templ](https://templ.guide/)** - Type-safe Go templating language
-- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first CSS framework
-- **[DaisyUI](https://daisyui.com/)** - Beautiful component library for Tailwind
-- **[Air](https://github.com/air-verse/air)** - Live reload for Go apps
+- **[HTMX](https://htmx.org/)** 2.0.10 - Modern interactivity without JavaScript frameworks
+- **[Templ](https://templ.guide/)** 0.3.1020 - Type-safe Go templating language
+- **[Tailwind CSS](https://tailwindcss.com/)** 4.3.3 - Utility-first CSS framework
+- **[Tailwind Typography](https://github.com/tailwindlabs/tailwindcss-typography)** 0.5.20 - Rich text styling
+- **[DaisyUI](https://daisyui.com/)** 5.7.22 - Beautiful component library for Tailwind
+- **[Air](https://github.com/air-verse/air)** 1.67.4 - Live reload for Go apps
 
 ## Features
 
@@ -37,13 +40,14 @@ A production-ready starter template for building modern web applications with Go
 ✅ Beautiful default UI with DaisyUI components  
 ✅ HTTP/2 support  
 ✅ Production-ready project structure  
+✅ GitHub Actions CI for tests, audits, and production builds
 
 ## Quick Start
 
 ### Prerequisites
 
-- Go 1.23 or later
-- Node.js 18 or later
+- Go 1.27 or later
+- Node.js 22 or later
 - Make
 
 ### Three Commands to Get Started
@@ -127,7 +131,6 @@ make dev
 ├── Makefile                  # Build automation
 ├── Dockerfile                # Production container
 ├── docker-compose.yml        # Docker Compose setup
-├── tailwind.config.js        # Tailwind configuration
 ├── .air.toml                 # Air configuration
 └── go.mod                    # Go dependencies
 ```
@@ -274,11 +277,11 @@ The Docker image is optimized:
 
 ### Change Theme
 
-Edit `tailwind.config.js` to change DaisyUI themes:
+Edit the DaisyUI plugin block in `src/styles/input.css` to change themes:
 
-```javascript
-daisyui: {
-  themes: ["light", "dark", "cupcake", "cyberpunk"], // Add more themes
+```css
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark, cupcake, cyberpunk;
 }
 ```
 
@@ -287,9 +290,16 @@ daisyui: {
 Add styles to `src/styles/input.css`:
 
 ```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+
+@source "../../templates";
+@source "../";
+
+@plugin "@tailwindcss/typography";
+
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark, cupcake;
+}
 
 /* Your custom styles */
 .my-custom-class {
@@ -326,7 +336,7 @@ make dev
 templ generate
 
 # Or reinstall templ
-go install github.com/a-h/templ/cmd/templ@latest
+go install github.com/a-h/templ/cmd/templ@v0.3.1020
 ```
 
 ## Contributing

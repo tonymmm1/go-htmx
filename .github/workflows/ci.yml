@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Verify Go modules
+        run: go mod verify
+
+      - name: Generate Templ files
+        run: go run github.com/a-h/templ/cmd/templ@v0.3.1020 generate
+
+      - name: Build CSS
+        run: npm run build:css
+
+      - name: Vet Go code
+        run: go vet ./...
+
+      - name: Test Go code
+        run: go test ./...
+
+      - name: Build application
+        run: go build -trimpath -o bin/server ./src/cmd/main.go
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Scan Go dependencies
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+      - name: Build production container
+        run: docker build --tag go-htmx:ci .

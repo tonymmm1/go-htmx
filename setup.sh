@@ -11,6 +11,8 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
+AIR_VERSION="v1.67.4"
+TEMPL_VERSION="v0.3.1020"
 
 # Banner
 echo -e "${BLUE}"
@@ -30,16 +32,27 @@ echo -e "${NC}"
 echo -e "${BLUE}Checking prerequisites...${NC}"
 
 if ! command -v go &> /dev/null; then
-    echo -e "${RED}✗ Go is not installed. Please install Go 1.23 or later.${NC}"
+    echo -e "${RED}✗ Go is not installed. Please install Go 1.27 or later.${NC}"
     exit 1
 fi
-echo -e "${GREEN}✓ Go $(go version | awk '{print $3}')${NC}"
+GO_VERSION=$(go env GOVERSION)
+if [[ ! "$GO_VERSION" =~ ^go([0-9]+)\.([0-9]+) ]] ||
+    (( BASH_REMATCH[1] < 1 || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] < 27) )); then
+    echo -e "${RED}✗ Go 1.27 or later is required (found ${GO_VERSION}).${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Go ${GO_VERSION}${NC}"
 
 if ! command -v node &> /dev/null; then
-    echo -e "${RED}✗ Node.js is not installed. Please install Node.js 18 or later.${NC}"
+    echo -e "${RED}✗ Node.js is not installed. Please install Node.js 22 or later.${NC}"
     exit 1
 fi
-echo -e "${GREEN}✓ Node.js $(node --version)${NC}"
+NODE_VERSION=$(node --version)
+if [[ ! "$NODE_VERSION" =~ ^v([0-9]+)\. ]] || (( BASH_REMATCH[1] < 22 )); then
+    echo -e "${RED}✗ Node.js 22 or later is required (found ${NODE_VERSION}).${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Node.js ${NODE_VERSION}${NC}"
 
 if ! command -v npm &> /dev/null; then
     echo -e "${RED}✗ npm is not installed.${NC}"
@@ -89,8 +102,8 @@ fi
 # Install Go tools FIRST (needed for templ generate)
 echo ""
 echo -e "${BLUE}Installing Go tools (air, templ)...${NC}"
-go install github.com/air-verse/air@latest
-go install github.com/a-h/templ/cmd/templ@latest
+go install github.com/air-verse/air@"${AIR_VERSION}"
+go install github.com/a-h/templ/cmd/templ@"${TEMPL_VERSION}"
 echo -e "${GREEN}✓ Go tools installed${NC}"
 
 # Generate templ files BEFORE go mod tidy
@@ -128,7 +141,7 @@ echo -e "${GREEN}✓ Directories created${NC}"
 # Build initial CSS
 echo ""
 echo -e "${BLUE}Building initial CSS...${NC}"
-npx tailwindcss -i ./src/styles/input.css -o ./static/css/styles.css --minify
+npm run build:css
 echo -e "${GREEN}✓ CSS built${NC}"
 
 # Success message
@@ -149,4 +162,3 @@ echo ""
 echo -e "${BLUE}Your app will be available at:${NC}"
 echo -e "  ${GREEN}http://localhost:8080${NC}"
 echo ""
-

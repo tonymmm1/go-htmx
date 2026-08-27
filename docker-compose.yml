@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build:
@@ -19,26 +17,23 @@ services:
 
   # Development service with hot reload
   dev:
-    image: golang:1.25
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
     working_dir: /app
     volumes:
       - .:/app
       - go-mod-cache:/go/pkg/mod
+      - node-modules:/app/node_modules
     ports:
       - "${PORT:-8080}:8080"
     environment:
       - PORT=8080
-    command: >
-      bash -c "
-        apt-get update && apt-get install -y nodejs npm make &&
-        go install github.com/air-verse/air@latest &&
-        go install github.com/a-h/templ/cmd/templ@latest &&
-        npm install &&
-        make dev
-      "
+    command: make dev
     profiles:
       - dev
 
 volumes:
   go-mod-cache:
-
+  node-modules:

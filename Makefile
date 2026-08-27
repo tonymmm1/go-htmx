@@ -3,6 +3,8 @@
 PORT      ?= 8080
 IMAGE     ?= gohtmx
 CONTAINER ?= gohtmx-dev
+AIR_VERSION   ?= v1.67.4
+TEMPL_VERSION ?= v0.3.1020
 
 .PHONY: all dev build docker-build docker-up docker-down compose-up compose-dev compose-down clean tools deps setup new-page new-component
 
@@ -15,8 +17,8 @@ setup:
 # Install Go tools
 tools:
 	@echo "Installing Go tools..."
-	@go install github.com/air-verse/air@latest
-	@go install github.com/a-h/templ/cmd/templ@latest
+	@go install github.com/air-verse/air@$(AIR_VERSION)
+	@go install github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
 	@echo "Tools installed successfully"
 
 # Install dependencies
@@ -33,7 +35,7 @@ dev: tools deps
 	@templ generate
 	@npx concurrently \
 		"templ generate --watch --proxy='http://localhost:$(PORT)' --open-browser=false" \
-		"npx tailwindcss -i ./src/styles/input.css -o ./static/css/styles.css --watch" \
+		"npm run dev:css" \
 		"air" \
 		--names "templ,css,go" \
 		--prefix-colors "blue,green,yellow" \
@@ -43,7 +45,7 @@ dev: tools deps
 build: deps
 	@echo "Building for production..."
 	@mkdir -p bin static/css
-	@npx tailwindcss -i ./src/styles/input.css -o ./static/css/styles.css --minify
+	@npm run build:css
 	@templ generate
 	@go build -ldflags="-s -w" -o bin/server ./src/cmd/main.go
 	@echo "Build complete: ./bin/server"
@@ -68,16 +70,16 @@ docker-down:
 
 # Docker Compose - production
 compose-up:
-	docker-compose up -d
+	docker compose up -d
 	@echo "Application running on http://localhost:$(PORT)"
 
 # Docker Compose - development with hot reload
 compose-dev:
-	docker-compose --profile dev up dev
+	docker compose --profile dev up dev
 
 # Docker Compose - stop
 compose-down:
-	docker-compose down
+	docker compose down
 
 # Clean build artifacts
 clean:

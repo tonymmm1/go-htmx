@@ -4,14 +4,15 @@
     "description": "Go-HTMX starter template",
     "scripts": {
         "dev": "make dev",
-        "build": "make build"
+        "build": "make build",
+        "dev:css": "tailwindcss -i ./src/styles/input.css -o ./static/css/styles.css --watch",
+        "build:css": "tailwindcss -i ./src/styles/input.css -o ./static/css/styles.css --minify"
     },
     "devDependencies": {
-        "concurrently": "^9.2.1",
-        "daisyui": "^5.5.5",
-        "tailwindcss": "^4.1.17"
-    },
-    "dependencies": {
-        "@tailwindcss/cli": "^4.1.17"
+        "@tailwindcss/cli": "^4.3.3",
+        "@tailwindcss/typography": "^0.5.20",
+        "concurrently": "^10.0.5",
+        "daisyui": "^5.7.22",
+        "tailwindcss": "^4.3.3"
     }
 }
