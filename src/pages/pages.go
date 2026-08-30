@@ -7,14 +7,13 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/go-chi/chi/v5"
 	"github.com/tonymmm1/go-htmx/src/config"
 	"github.com/tonymmm1/go-htmx/templates/components"
 	pagetemplates "github.com/tonymmm1/go-htmx/templates/pages"
 )
 
 var exampleTopics = []string{
-	"Go + Chi routing",
+	"Go standard library routing",
 	"Templ components",
 	"HTMX partial swaps",
 	"Tailwind CSS + DaisyUI",
@@ -26,13 +25,13 @@ type Handler struct {
 	Config *config.Config
 }
 
-func RegisterPageRoutes(h *Handler, r chi.Router) {
-	r.Get("/", h.HandleIndex)
-	r.Get("/about", h.HandleAbout)
-	r.Get("/examples", h.HandleExamples)
-	r.Get("/examples/time", h.HandleExampleTime)
-	r.Get("/examples/search", h.HandleExampleSearch)
-	r.Post("/examples/counter", h.HandleExampleCounter)
+func RegisterPageRoutes(h *Handler, mux *http.ServeMux) {
+	mux.HandleFunc("GET /{$}", h.HandleIndex)
+	mux.HandleFunc("GET /about", h.HandleAbout)
+	mux.HandleFunc("GET /examples", h.HandleExamples)
+	mux.HandleFunc("GET /examples/time", h.HandleExampleTime)
+	mux.HandleFunc("GET /examples/search", h.HandleExampleSearch)
+	mux.HandleFunc("POST /examples/counter", h.HandleExampleCounter)
 	// scaffold:routes -- new-page.sh inserts generated routes above this line.
 }
 

@@ -6,8 +6,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func TestExamplesPageIncludesWorkingHTMXPatterns(t *testing.T) {
@@ -89,9 +87,31 @@ func TestExampleCounterRejectsInvalidInput(t *testing.T) {
 	}
 }
 
+func TestStandardLibraryRouting(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		target string
+		want   int
+	}{
+		{name: "exact root", method: http.MethodGet, target: "/", want: http.StatusOK},
+		{name: "unknown route", method: http.MethodGet, target: "/missing", want: http.StatusNotFound},
+		{name: "method mismatch", method: http.MethodPost, target: "/about", want: http.StatusMethodNotAllowed},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := performRequest(test.method, test.target, "")
+			if recorder.Code != test.want {
+				t.Fatalf("%s %s returned %d, want %d", test.method, test.target, recorder.Code, test.want)
+			}
+		})
+	}
+}
+
 func performRequest(method, target, form string) *httptest.ResponseRecorder {
-	router := chi.NewRouter()
-	RegisterPageRoutes(&Handler{}, router)
+	mux := http.NewServeMux()
+	RegisterPageRoutes(&Handler{}, mux)
 
 	request := httptest.NewRequest(method, target, strings.NewReader(form))
 	if form != "" {
@@ -99,6 +119,6 @@ func performRequest(method, target, form string) *httptest.ResponseRecorder {
 	}
 
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, request)
+	mux.ServeHTTP(recorder, request)
 	return recorder
 }

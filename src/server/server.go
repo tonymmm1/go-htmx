@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/tonymmm1/go-htmx/src/config"
 	"github.com/tonymmm1/go-htmx/src/middleware"
 	"github.com/tonymmm1/go-htmx/src/pages"
@@ -29,23 +28,23 @@ func (s *Server) Run() error {
 		Config: s.config,
 	}
 
-	// HTTP router
-	r := chi.NewRouter()
-
-	// Apply middleware stack
-	middleware.Stack(r)
+	// Standard library HTTP router
+	mux := http.NewServeMux()
 
 	// Static files
 	fileServer := http.FileServer(http.Dir("./static"))
-	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
+	mux.Handle("GET /static/", http.StripPrefix("/static/", fileServer))
 
 	// HTTP routes
-	pages.RegisterPageRoutes(pagesHandler, r) // Page routes
+	pages.RegisterPageRoutes(pagesHandler, mux)
+
+	// Apply middleware stack
+	handler := middleware.Stack(mux)
 
 	h2s := &http2.Server{}
 	srv := &http.Server{
 		Addr:    fmt.Sprintf("0.0.0.0:%v", s.config.Port),
-		Handler: h2c.NewHandler(r, h2s),
+		Handler: h2c.NewHandler(handler, h2s),
 	}
 
 	// Start server

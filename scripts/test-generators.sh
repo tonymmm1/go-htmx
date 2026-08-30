@@ -39,7 +39,7 @@ bash scripts/new-page.sh contact-us
 bash scripts/new-component.sh feature-card
 
 grep -Fq 'example.com/scaffold/site/templates/layouts' templates/pages/contact-us.templ
-grep -Fq 'r.Get("/contact-us", h.HandleContactUs)' src/pages/pages.go
+grep -Fq 'mux.HandleFunc("GET /contact-us", h.HandleContactUs)' src/pages/pages.go
 grep -Fq 'func (h *Handler) HandleContactUs' src/pages/pages.go
 grep -Fq 'templ FeatureCard(title string)' templates/components/feature-card.templ
 

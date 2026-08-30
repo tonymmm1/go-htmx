@@ -44,7 +44,7 @@ if grep -Fq "Handle${PAGE_COMPONENT}" "$HANDLERS_FILE"; then
     exit 1
 fi
 
-if grep -Fq "r.Get(\"/${PAGE_SLUG}\"" "$HANDLERS_FILE"; then
+if grep -Fq "mux.HandleFunc(\"GET /${PAGE_SLUG}\"" "$HANDLERS_FILE"; then
     echo "Error: route /${PAGE_SLUG} already exists."
     exit 1
 fi
@@ -77,7 +77,7 @@ templ ${PAGE_COMPONENT}() {
 }
 EOF
 
-awk -v route="r.Get(\"/${PAGE_SLUG}\", h.Handle${PAGE_COMPONENT})" '
+awk -v route="mux.HandleFunc(\"GET /${PAGE_SLUG}\", h.Handle${PAGE_COMPONENT})" '
     /\/\/ scaffold:routes/ { print "\t" route }
     { print }
 ' "$HANDLERS_FILE" > "$HANDLERS_TMP"

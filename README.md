@@ -23,7 +23,7 @@ A production-ready starter template for building modern web applications with Go
 ## Tech Stack
 
 - **[Go](https://go.dev/)** 1.27 - Fast, reliable backend language
-- **[Chi Router](https://github.com/go-chi/chi)** - Lightweight, idiomatic HTTP router
+- **[Go net/http](https://pkg.go.dev/net/http)** - Standard library HTTP server and routing
 - **[HTMX](https://htmx.org/)** 2.0.10 - Modern interactivity without JavaScript frameworks
 - **[Templ](https://templ.guide/)** 0.3.1020 - Type-safe Go templating language
 - **[Tailwind CSS](https://tailwindcss.com/)** 4.3.3 - Utility-first CSS framework
@@ -35,7 +35,7 @@ A production-ready starter template for building modern web applications with Go
 
 ✅ Hot-reloading for Go, Templ, and CSS files  
 ✅ Type-safe HTML templating with Templ  
-✅ Pre-configured middleware (CORS, rate limiting, security headers)  
+✅ Standard-library middleware (rate limiting, gzip, logging, recovery, security headers)<br>
 ✅ Docker support for production deployment  
 ✅ Beautiful default UI with DaisyUI components  
 ✅ Working HTMX examples with fragment responses<br>
@@ -228,10 +228,16 @@ in `src/pages/pages.go`.
 ### Customizing Middleware
 
 Edit `src/middleware/middleware.go` to modify:
-- CORS settings
 - Rate limiting
-- Security headers
-- Add custom middleware
+- Response compression
+- Logging and panic recovery
+- Security headers or custom middleware
+
+The default limiter keys requests by the direct TCP peer and intentionally
+ignores forwarded-IP headers. When deploying behind a trusted proxy, configure
+rate limiting at that proxy or add an explicit trusted-proxy policy first. HTMX
+requests are same-origin, so CORS middleware is only needed if you later expose
+an API to other origins.
 
 ### Environment Variables
 
@@ -362,4 +368,4 @@ MIT License - feel free to use this template for any project.
 - [Templ Documentation](https://templ.guide/)
 - [Tailwind CSS Documentation](https://tailwindcss.com/docs)
 - [DaisyUI Components](https://daisyui.com/components/)
-- [Chi Router](https://github.com/go-chi/chi)
+- [Go net/http Documentation](https://pkg.go.dev/net/http)
