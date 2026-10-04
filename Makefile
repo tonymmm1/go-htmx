@@ -55,7 +55,9 @@ css: node_modules/.package-lock.json
 # Hot reload: templ watches .templ and .go files, regenerates code, restarts the
 # server (`go run`) on Go changes and reloads the browser through its proxy.
 # Open http://localhost:$(PROXY_PORT) (the proxy) rather than :$(PORT).
-dev: node_modules/.package-lock.json
+# css runs first so the server never starts before static/css/styles.css exists
+# (static.Path panics on missing assets in development).
+dev: css
 	@echo "Dev server: http://localhost:$(PROXY_PORT) (proxying :$(PORT))"
 	@$(MAKE) --no-print-directory -j2 watch-templ watch-css
 
