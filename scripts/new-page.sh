@@ -102,4 +102,4 @@ trap - EXIT
 
 echo "Created $TEMPLATE_FILE"
 echo "Added /${PAGE_SLUG} and Handle${PAGE_COMPONENT} to $HANDLERS_FILE"
-echo "Run 'templ generate' (or leave 'make dev' running) to generate the Go template."
+echo "Run 'make generate' (or leave 'make dev' running) to generate the Go template."

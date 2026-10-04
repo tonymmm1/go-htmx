@@ -1,156 +1,130 @@
-# Quick Start Guide
+# Quick Start
 
-## For New Projects
+You need Go 1.27+, Node.js 22+ with npm, and make. Node is only used to build the CSS; it isn't needed
+to run the app.
 
-### Option 1: Using the Scaffolder (Recommended)
+## 1. Create a project
+
+Pick one of these. Each ends with a project that has your module path, a `.env`, installed dependencies,
+generated templ code and built CSS.
+
+### Option A: scaffolder
 
 ```bash
-# Download and run the scaffolder
-curl -sSL https://raw.githubusercontent.com/tonymmm1/go-htmx/main/create-go-htmx.sh | bash -s -- my-project github.com/yourname/my-project
-
-# Or download first, then run
-wget https://raw.githubusercontent.com/tonymmm1/go-htmx/main/create-go-htmx.sh
-bash create-go-htmx.sh my-project
+curl -sSL https://raw.githubusercontent.com/tonymmm1/go-htmx/main/create-go-htmx.sh \
+  | bash -s -- my-project github.com/you/my-project
 ```
 
-This will:
-1. Clone the template
-2. Update module paths
-3. Install all dependencies
-4. Set up the project structure
-5. Initialize git repository
+Or download `create-go-htmx.sh` and run `bash create-go-htmx.sh my-project`; it prompts for the module
+path (default `github.com/<your user>/my-project`). The script clones the template into `my-project/`,
+removes its git history, runs `setup.sh` with your module path, and makes an initial git commit.
 
-### Option 2: Manual Clone
+### Option B: clone or GitHub template
+
+Clone the repository (or create a new repository from it on GitHub and clone that), then run setup with
+your module path:
 
 ```bash
-# Clone the repository
 git clone https://github.com/tonymmm1/go-htmx.git my-project
 cd my-project
-
-# Update go.mod with your module path
-# Change "github.com/tonymmm1/go-htmx" to your own
-
-# Update import paths in all .go files
-find src -type f -name "*.go" -exec sed -i 's|github.com/tonymmm1/go-htmx|github.com/yourname/my-project|g' {} +
-
-# Run setup
-make setup
-
-# Start development
-make dev
+bash setup.sh github.com/you/my-project
 ```
 
-## For This Existing Project
+`setup.sh` updates `go.mod` and every import in `.go`, `.templ` and generator scripts.
+`make setup MODULE=github.com/you/my-project` does the same; plain `make setup` keeps the current module path.
 
-If you've already cloned this repository:
+### Option C: gonew
 
 ```bash
-# Just run setup
+go run golang.org/x/tools/cmd/gonew@latest github.com/tonymmm1/go-htmx github.com/you/my-project
+cd my-project
 make setup
+git init
+```
 
-# Start development server
+`gonew` rewrites imports in `.go` files only; `make setup` fixes the ones in `.templ` files.
+
+## 2. Run it
+
+```bash
 make dev
 ```
 
-Visit http://localhost:8080
+Open **http://localhost:7331** (templ's live-reload proxy; the app itself listens on port 8080). Edit
+`templates/pages/index.templ` and the browser reloads. Go changes restart the server. `/examples` shows
+the htmx demos.
 
-Visit http://localhost:8080/examples for working fragment GET, live-search, and
-form POST examples.
+## 3. First changes
 
-## Your First Changes
-
-### Create a New Page
+**Add a page:**
 
 ```bash
 make new-page pricing
 ```
 
-This creates `templates/pages/pricing.templ`, adds the handler, and registers
-`GET /pricing` automatically.
-
-### Create a Component
-
-```bash
-make new-component hero
-```
-
-Use it in your pages:
+This creates `templates/pages/pricing.templ` and adds a `GET /pricing` route and `HandlePricing` handler
+to `internal/pages/pages.go`. To link it from the nav, add a line next to the others in
+`templates/layouts/layout.templ`:
 
 ```templ
-@components.Hero("Welcome to My App")
+@navLink(meta.Path, "/pricing", "Pricing")
 ```
 
-### Customize the Theme
+**Add a component:**
 
-Edit the DaisyUI plugin block in `src/styles/input.css`:
+```bash
+make new-component pricing-card
+```
 
-```css
-@plugin "daisyui" {
-  themes: light --default, dark --prefersdark, cyberpunk;
+Then import `github.com/you/my-project/templates/components` in a page and use
+`@components.PricingCard("Pro")`.
+
+**Return a fragment for htmx.** Add a route in `internal/pages/pages.go` and render a component with
+`Render` (use `RenderPage` for full pages):
+
+```go
+mux.HandleFunc("GET /examples/time", h.HandleExampleTime)
+
+func (h *Handler) HandleExampleTime(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	now := time.Now().Format("Mon, 02 Jan 2006 15:04:05 MST")
+	Render(w, r, http.StatusOK, components.ServerTime(now))
 }
 ```
 
-Change the theme in `templates/layouts/layout.templ`:
+`templates/pages/examples.templ` and `templates/components/examples.templ` show the matching markup.
 
-```html
-<html lang="en" data-theme="cyberpunk">
-```
+**Rename the site:** change `SiteName` in `templates/layouts/meta.go`.
 
-## Common Commands
+**Change themes or add CSS:** edit `styles/input.css`.
+
+**Add JavaScript:** put it in `static/js/app.js`. The Content Security Policy blocks inline `<script>`,
+`style="..."` and `hx-on:*` attributes.
+
+**Add a new asset directory** (e.g. `static/fonts/`): add it to the `//go:embed` line in
+`static/static.go`, or it won't be in the production binary.
+
+## 4. Before you commit
 
 ```bash
-make dev          # Start dev server (hot reload)
-make build        # Build for production
-make docker-up    # Run in Docker
-make help         # Show all commands
+make check   # format check, go vet + staticcheck, race tests, generator test, build
 ```
 
-## Next Steps
+## 5. Deploy
 
-1. **Read the full README.md** for detailed documentation
-2. **Check src/pages/** to see example pages
-3. **Check src/middleware/** to configure CORS, rate limiting, etc.
-4. **Add your own routes** in `src/pages/pages.go`
-5. **Deploy** - the built binary is self-contained!
+```bash
+make build && ./bin/server   # single binary, assets embedded
+make docker-up               # or a ~19 MB distroless image
+```
+
+The app runs in production mode unless `APP_ENV=development` is set; note that `./bin/server` also loads
+`.env` from the current directory if there is one. If it runs behind a reverse proxy, set
+`TRUSTED_PROXIES` to the proxy's network so rate limiting sees real client IPs, and set HSTS on the proxy.
+See the [README](README.md) for configuration, middleware and deployment details.
 
 ## Troubleshooting
 
-### "command not found: templ"
-
-```bash
-make tools
-```
-
-### Port 8080 already in use
-
-Edit `.env`:
-```
-PORT=3000
-```
-
-### Dependencies not installed
-
-```bash
-make deps
-```
-
-## Getting Help
-
-- Check the [README.md](README.md) for full documentation
-- Look at example pages in `src/pages/`
-- Review the middleware setup in `src/middleware/`
-
-## Production Deployment
-
-```bash
-# Build binary
-make build
-
-# Run it
-./bin/server
-
-# Or use Docker
-make docker-up
-```
-
-The binary is self-contained and includes all templates!
+- **`templ: command not found`**: templ is a Go tool in this project. Use `go tool templ generate` or
+  `make generate`.
+- **500 error mentioning `has the asset been built?`**: the CSS is missing. Run `make css`.
+- **Port in use**: set `PORT` in `.env`, or run `PROXY_PORT=7332 make dev` for the proxy port.

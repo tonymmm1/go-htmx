@@ -28,7 +28,7 @@ all: dev
 
 # One-command setup: fixes module paths, creates .env, installs deps, builds CSS
 setup:
-	@bash setup.sh
+	@bash setup.sh $(MODULE)
 
 # templ is pinned as a Go tool in go.mod, so downloading modules is enough
 tools:
@@ -76,7 +76,7 @@ build: css generate
 	@echo "Build complete: ./bin/server"
 
 run: build
-	@./bin/server
+	@APP_ENV=production ./bin/server
 
 ## Quality ----------------------------------------------------------------------
 
@@ -166,10 +166,10 @@ help:
 	@echo "Go-HTMX Makefile Commands:"
 	@echo ""
 	@echo "Setup & Development:"
-	@echo "  make setup                - Complete project setup (run this first!)"
+	@echo "  make setup [MODULE=path]  - Complete project setup (run this first!)"
 	@echo "  make dev                  - Hot-reload dev server on http://localhost:$(PROXY_PORT)"
 	@echo "  make build                - Build production binary (./bin/server)"
-	@echo "  make run                  - Build and run the server"
+	@echo "  make run                  - Build and run the server (APP_ENV=production)"
 	@echo "  make generate             - Generate Go code from .templ files"
 	@echo "  make css                  - Build minified CSS"
 	@echo ""
@@ -182,6 +182,8 @@ help:
 	@echo "  make test-race            - Run tests with the race detector"
 	@echo "  make test-generators      - Smoke-test project generators"
 	@echo "  make fmt                  - Format Go and templ files"
+	@echo "  make fmt-check            - Fail if Go or templ files need formatting"
+	@echo "  make vet                  - go vet"
 	@echo "  make lint                 - go vet + staticcheck"
 	@echo "  make check                - Format check, lint, tests, build (CI)"
 	@echo "  make audit                - npm audit + govulncheck"

@@ -5,8 +5,6 @@
 
 # Documentation
 *.md
-COMPARISON.md
-QUICKSTART.md
 LICENSE
 
 # CI/CD and container config
