@@ -337,13 +337,6 @@ func TestOnlySmallerCompressibleFilesAreCompressed(t *testing.T) {
 		t.Fatalf("png Content-Type = %q", got)
 	}
 
-	tiny := &asset{data: []byte("a")}
-	if err := tiny.compress(); err != nil {
-		t.Fatal(err)
-	}
-	if tiny.br != nil || tiny.gz != nil {
-		t.Fatalf("1-byte file kept variants: br %d bytes, gzip %d bytes", len(tiny.br), len(tiny.gz))
-	}
 }
 
 // TestDroppedBrotliFallsBackToGzip covers a file whose Brotli variant was not
@@ -547,58 +540,86 @@ func TestVendoredHTMXIntegrity(t *testing.T) {
 	}
 }
 
-func TestNegotiateEncoding(t *testing.T) {
-	type have struct{ br, gzip bool }
-	both, gzipOnly, brOnly := have{true, true}, have{false, true}, have{true, false}
-	cases := []struct {
-		header string
-		have   have
-		want   string
-	}{
-		{"", both, ""},
-		{"gzip", both, "gzip"},
-		{"GZIP", both, "gzip"},
-		{"x-gzip", both, "gzip"},
-		{"br", both, "br"},
-		{"Br", both, "br"},
-		{"gzip, deflate, br, zstd", both, "br"},
-		{"br;q=0.5, gzip;q=0.5", both, "br"},
-		{"br;q=0.4, gzip;q=0.5", both, "gzip"},
-		{"gzip; q=0.5", both, "gzip"},
-		{"br;q=0, gzip", both, "gzip"},
-		{"br; Q=0, gzip", both, "gzip"},
-		{"br;level=1;q=0, gzip", both, "gzip"},
-		{"gzip;q=0", both, ""},
-		{"br;q=0, gzip;q=0", both, ""},
-		{"br;q=bogus, gzip", both, "gzip"},
-		{"*", both, "br"},
-		{"*;q=0", both, ""},
-		{"gzip, *;q=0", both, "gzip"},
-		{"br;q=0, *", both, "gzip"},
-		{"gzip;q=0, *", both, "br"},
-		{"gzip;q=0.9, *;q=0.5", both, "gzip"},
-		{"identity, *;q=0.1", both, "br"},
-		{"identity", both, ""},
-		{"deflate, zstd", both, ""},
-		{"br, gzip", gzipOnly, "gzip"},
-		{"br", gzipOnly, ""},
-		{"*", gzipOnly, "gzip"},
-		{"br, gzip", brOnly, "br"},
-		{"gzip", brOnly, ""},
-		{"br, gzip", have{}, ""},
-	}
-	for _, c := range cases {
-		if got := negotiateEncoding(c.header, c.have.br, c.have.gzip); got != c.want {
-			t.Errorf("negotiateEncoding(%q, br=%v, gzip=%v) = %q, want %q", c.header, c.have.br, c.have.gzip, got, c.want)
+// A failed precondition (412) has no body, so the encoded representation's
+// Content-Encoding and Content-Length must not be sent with it.
+func TestPreconditionFailedDropsEncodingHeaders(t *testing.T) {
+	setup(t, testFS(), false)
+
+	for _, accept := range []string{"br", "gzip"} {
+		rec := get(t, http.MethodGet, "/static/css/app.css", "Accept-Encoding", accept, "If-Match", `"other"`)
+		if rec.Code != http.StatusPreconditionFailed {
+			t.Fatalf("%s: status = %d, want 412", accept, rec.Code)
 		}
+		if got := rec.Header().Get("Content-Encoding"); got != "" {
+			t.Errorf("%s: Content-Encoding = %q, want none", accept, got)
+		}
+		if got := rec.Header().Get("Content-Length"); got != "" {
+			t.Errorf("%s: Content-Length = %q, want none", accept, got)
+		}
+	}
+
+	// A matching If-Match still gets the encoded body.
+	rec := get(t, http.MethodGet, "/static/css/app.css", "Accept-Encoding", "br", "If-Match", cssETag("-br"))
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Encoding") != "br" {
+		t.Fatalf("matching If-Match: status = %d, Content-Encoding = %q", rec.Code, rec.Header().Get("Content-Encoding"))
+	}
+	if got, want := rec.Header().Get("Content-Length"), strconv.Itoa(rec.Body.Len()); got != want {
+		t.Fatalf("Content-Length = %q, want %q", got, want)
 	}
 }
 
-func TestBrotliWindow(t *testing.T) {
-	cases := map[int]int{0: 10, 1: 10, 1008: 10, 1009: 11, 3202: 12, 51238: 16, 118315: 17, 1 << 30: 24}
-	for n, want := range cases {
-		if got := brotliWindow(n); got != want {
-			t.Errorf("brotliWindow(%d) = %d, want %d", n, got, want)
-		}
+// When only a Brotli variant exists, a gzip-only client gets the identity
+// bytes with the identity ETag. The response carries an ETag, so the gzip
+// middleware leaves it alone rather than compressing it again.
+func TestBrotliOnlyAssetServesIdentityToGzipClients(t *testing.T) {
+	setup(t, testFS(), false)
+	load().files["css/app.css"].gz = nil
+
+	rec := get(t, http.MethodGet, "/static/css/app.css", "Accept-Encoding", "gzip")
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, want identity", got)
+	}
+	if got, want := rec.Header().Get("ETag"), cssETag(""); got != want {
+		t.Fatalf("ETag = %q, want %q", got, want)
+	}
+	if got := rec.Body.String(); got != cssBody {
+		t.Fatal("body is not the identity bytes")
+	}
+	if got := get(t, http.MethodGet, "/static/css/app.css", "Accept-Encoding", "gzip, br").Header().Get("Content-Encoding"); got != "br" {
+		t.Fatalf("br-capable client: Content-Encoding = %q, want br", got)
+	}
+}
+
+// The embedded assets are compressed once per process, however many times
+// Configure runs (each test server calls it).
+func TestEmbeddedAssetsAreBuiltOnce(t *testing.T) {
+	t.Cleanup(func() { current.Store(nil) })
+	Configure(false, "ignored")
+	first := current.Load()
+	Configure(false, "ignored")
+	if current.Load() != first {
+		t.Fatal("Configure rebuilt the embedded assets")
+	}
+}
+
+func TestCompressAllKeepsOnlySmallerVariants(t *testing.T) {
+	files := map[string]*asset{
+		"big.css":  {data: []byte(cssBody), ctype: "text/css; charset=utf-8"},
+		"tiny.txt": {data: []byte("a"), ctype: "text/plain; charset=utf-8"},
+		"logo.png": {data: pngBody, ctype: "image/png"},
+	}
+	if err := compressAll(files); err != nil {
+		t.Fatal(err)
+	}
+	if f := files["big.css"]; f.gz == nil || f.br == nil {
+		t.Error("big.css should have gzip and br variants")
+	} else if unbrotli(t, f.br) != cssBody || gunzip(t, f.gz) != cssBody {
+		t.Error("variants do not decompress to the original")
+	}
+	if f := files["tiny.txt"]; f.gz != nil || f.br != nil {
+		t.Error("tiny.txt variants are not smaller and should be dropped")
+	}
+	if f := files["logo.png"]; f.gz != nil || f.br != nil {
+		t.Error("png is not compressible and should have no variants")
 	}
 }

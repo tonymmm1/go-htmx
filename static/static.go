@@ -38,6 +38,7 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -46,6 +47,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,6 +55,7 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
+	"github.com/tonymmm1/go-htmx/internal/contentcoding"
 )
 
 // embedded holds the production assets. css/ is Tailwind build output and is
@@ -87,9 +90,17 @@ type assets struct {
 	// in production. nil disables the check.
 	embedded fs.FS
 	warned   sync.Map
+	// prepared is how long indexing and compression took (production only).
+	prepared time.Duration
 }
 
 var current atomic.Pointer[assets]
+
+// embeddedAssets indexes and compresses the embedded files once per process;
+// Configure, tests and the lazy fallback in load all share the result.
+var embeddedAssets = sync.OnceValues(func() (*assets, error) {
+	return build(embedded, false)
+})
 
 // Configure selects how assets are served. In development, files are read from
 // dir on every request so Tailwind's watcher output shows up without a rebuild.
@@ -97,28 +108,30 @@ var current atomic.Pointer[assets]
 // It should be called once at startup, before Handler or Path are used;
 // otherwise the embedded production assets are used.
 func Configure(dev bool, dir string) {
-	var fsys fs.FS = embedded
 	if dev {
-		fsys = os.DirFS(dir)
+		a, err := build(os.DirFS(dir), true)
+		if err != nil {
+			panic(fmt.Sprintf("static: %v", err))
+		}
+		a.embedded = embedded
+		log.Printf("static: serving assets from %s (development)", dir)
+		current.Store(a)
+		return
 	}
-	start := time.Now()
-	a, err := build(fsys, dev)
+
+	a, err := embeddedAssets()
 	if err != nil {
 		panic(fmt.Sprintf("static: %v", err))
 	}
-	if dev {
-		a.embedded = embedded
-		log.Printf("static: serving assets from %s (development)", dir)
-	} else {
-		var raw, gz, br int
-		for _, f := range a.files {
-			raw += len(f.data)
-			gz += len(f.body(negotiateEncoding("gzip", f.br != nil, f.gz != nil)))
-			br += len(f.body(negotiateEncoding("br, gzip", f.br != nil, f.gz != nil)))
-		}
-		log.Printf("static: serving %d embedded assets (%d bytes, %d gzip, %d br; prepared in %s)",
-			len(a.files), raw, gz, br, time.Since(start).Round(time.Millisecond))
+	// Totals as served to a gzip-only client and to a Brotli-capable one.
+	var raw, gz, br int
+	for _, f := range a.files {
+		raw += len(f.data)
+		gz += len(firstNonNil(f.gz, f.data))
+		br += len(firstNonNil(f.br, f.gz, f.data))
 	}
+	log.Printf("static: serving %d embedded assets (%d bytes, %d gzip, %d br; prepared in %s)",
+		len(a.files), raw, gz, br, a.prepared.Round(time.Millisecond))
 	current.Store(a)
 }
 
@@ -136,7 +149,7 @@ func load() *assets {
 	if a := current.Load(); a != nil {
 		return a
 	}
-	a, err := build(embedded, false)
+	a, err := embeddedAssets()
 	if err != nil {
 		panic(fmt.Sprintf("static: %v", err))
 	}
@@ -149,6 +162,7 @@ func build(fsys fs.FS, dev bool) (*assets, error) {
 	if dev {
 		return a, nil
 	}
+	start := time.Now()
 
 	a.files = make(map[string]*asset)
 	err := fs.WalkDir(fsys, ".", func(name string, d fs.DirEntry, err error) error {
@@ -175,18 +189,54 @@ func build(fsys fs.FS, dev bool) (*assets, error) {
 			ctype: contentType(name, data),
 			hash:  hex.EncodeToString(sum[:])[:hashLen],
 		}
-		if compressible(f.ctype) {
-			if err := f.compress(); err != nil {
-				return fmt.Errorf("compressing %s: %w", name, err)
-			}
-		}
 		a.files[name] = f
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("indexing assets: %w", err)
 	}
+	if err := compressAll(a.files); err != nil {
+		return nil, err
+	}
+	a.prepared = time.Since(start)
 	return a, nil
+}
+
+// compressAll fills in the gzip and Brotli variants of every compressible
+// asset. Each (file, coding) pair runs on its own goroutine, bounded by
+// GOMAXPROCS, so startup takes about as long as the slowest single file.
+func compressAll(files map[string]*asset) error {
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		errs []error
+		sem  = make(chan struct{}, runtime.GOMAXPROCS(0))
+	)
+	run := func(name string, compress func([]byte) ([]byte, error), data []byte, dst *[]byte) {
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			out, err := compress(data)
+			if err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("compressing %s: %w", name, err))
+				mu.Unlock()
+				return
+			}
+			// Keep a variant only if it actually saves bytes.
+			if len(out) < len(data) {
+				*dst = out
+			}
+		})
+	}
+	for name, f := range files {
+		if compressible(f.ctype) {
+			run(name, gzipBytes, f.data, &f.gz)
+			run(name, brotliBytes, f.data, &f.br)
+		}
+	}
+	wg.Wait()
+	return errors.Join(errs...)
 }
 
 // Handler serves assets. It is mounted at "GET /static/" and expects the
@@ -223,12 +273,11 @@ func serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	coding := ""
-	if f.br != nil || f.gz != nil {
+	if offered := f.codings(); len(offered) > 0 {
 		h.Add("Vary", "Accept-Encoding")
 		// Ranges are only served from the identity bytes.
 		if r.Header.Get("Range") == "" {
-			accept := strings.Join(r.Header.Values("Accept-Encoding"), ",")
-			coding = negotiateEncoding(accept, f.br != nil, f.gz != nil)
+			coding = contentcoding.Negotiate(r, offered...)
 		}
 	}
 	body, etag := f.body(coding), f.hash
@@ -243,10 +292,31 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		h.Set("Content-Encoding", coding)
 		// ServeContent omits Content-Length when Content-Encoding is set.
 		h.Set("Content-Length", strconv.Itoa(len(body)))
+		w = &encodedWriter{ResponseWriter: w}
 	}
 
-	// ServeContent handles HEAD, If-None-Match, Range and Content-Length.
+	// ServeContent handles HEAD, conditional requests, Range and Content-Length.
 	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(body))
+}
+
+// encodedWriter drops the Content-Encoding and Content-Length set for an
+// encoded body when ServeContent answers with a bodiless status instead (412
+// from If-Match, for example), so the client isn't left waiting for bytes.
+// ServeContent already strips them itself for 304.
+type encodedWriter struct {
+	http.ResponseWriter
+}
+
+func (w *encodedWriter) WriteHeader(status int) {
+	if status != http.StatusOK {
+		w.Header().Del("Content-Encoding")
+		w.Header().Del("Content-Length")
+	}
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *encodedWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (a *assets) serveDisk(w http.ResponseWriter, r *http.Request, name string) {
@@ -312,34 +382,35 @@ func (a *assets) warnOnce(name, format string, args ...any) {
 	}
 }
 
-// body returns the bytes to send for a coding chosen by negotiateEncoding:
-// "br", "gzip" or "" (identity).
+// codings lists the precompressed variants of f in preference order.
+func (f *asset) codings() []string {
+	var codings []string
+	if f.br != nil {
+		codings = append(codings, "br")
+	}
+	if f.gz != nil {
+		codings = append(codings, "gzip")
+	}
+	return codings
+}
+
+// body returns the bytes to send for a coding from f.codings, or "" for the
+// identity bytes.
 func (f *asset) body(coding string) []byte {
-	switch {
-	case coding == "br" && f.br != nil:
+	switch coding {
+	case "br":
 		return f.br
-	case coding == "gzip" && f.gz != nil:
+	case "gzip":
 		return f.gz
 	}
 	return f.data
 }
 
-// compress stores the gzip and Brotli variants of f.data, each only if it is
-// smaller than the original.
-func (f *asset) compress() error {
-	gz, err := gzipBytes(f.data)
-	if err != nil {
-		return err
-	}
-	if len(gz) < len(f.data) {
-		f.gz = gz
-	}
-	br, err := brotliBytes(f.data)
-	if err != nil {
-		return err
-	}
-	if len(br) < len(f.data) {
-		f.br = br
+func firstNonNil(variants ...[]byte) []byte {
+	for _, v := range variants {
+		if v != nil {
+			return v
+		}
 	}
 	return nil
 }
@@ -396,15 +467,10 @@ func gzipBytes(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// brotliBytes compresses data at the highest quality. The window is the
-// smallest that covers the whole input, which keeps the decoder's memory use
-// small for small files without costing compression.
+// brotliBytes compresses data at the highest quality.
 func brotliBytes(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	bw := brotli.NewWriterOptions(&buf, brotli.WriterOptions{
-		Quality: brotli.BestCompression,
-		LGWin:   brotliWindow(len(data)),
-	})
+	bw := brotli.NewWriterLevel(&buf, brotli.BestCompression)
 	if _, err := bw.Write(data); err != nil {
 		return nil, err
 	}
@@ -412,68 +478,4 @@ func brotliBytes(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
-}
-
-// brotliWindow returns the base-2 log of the smallest Brotli window (10 to 24)
-// that can reference all n bytes. Brotli windows hold 2^lgwin-16 bytes.
-func brotliWindow(n int) int {
-	lgwin := 10
-	for lgwin < 24 && 1<<lgwin-16 < n {
-		lgwin++
-	}
-	return lgwin
-}
-
-// negotiateEncoding picks the content coding to serve from an Accept-Encoding
-// header, given which precompressed variants exist: "br", "gzip" or "" for the
-// identity bytes. A coding is acceptable if its q-value (or, if it is not
-// listed, the q-value of "*") is above zero; the highest q-value wins and ties
-// prefer br over gzip. Codings missing from the header are not acceptable,
-// so an empty header gets the identity bytes. The identity bytes are always
-// the fallback; an "identity" entry in the header is ignored.
-func negotiateEncoding(header string, haveBr, haveGzip bool) string {
-	brQ, gzipQ, wildcardQ := -1.0, -1.0, -1.0
-	for part := range strings.SplitSeq(header, ",") {
-		coding, params, _ := strings.Cut(part, ";")
-		q := 1.0
-		for param := range strings.SplitSeq(params, ";") {
-			name, value, ok := strings.Cut(param, "=")
-			if !ok || !strings.EqualFold(strings.TrimSpace(name), "q") {
-				continue
-			}
-			parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-			if err != nil {
-				parsed = 0
-			}
-			q = parsed
-		}
-		switch strings.ToLower(strings.TrimSpace(coding)) {
-		case "br":
-			brQ = q
-		case "gzip", "x-gzip":
-			gzipQ = q
-		case "*":
-			wildcardQ = q
-		}
-	}
-	if brQ < 0 {
-		brQ = wildcardQ
-	}
-	if gzipQ < 0 {
-		gzipQ = wildcardQ
-	}
-	if !haveBr {
-		brQ = 0
-	}
-	if !haveGzip {
-		gzipQ = 0
-	}
-
-	switch {
-	case brQ > 0 && brQ >= gzipQ:
-		return "br"
-	case gzipQ > 0:
-		return "gzip"
-	}
-	return ""
 }
