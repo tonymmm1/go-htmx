@@ -2,38 +2,47 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
     ports:
       - "${PORT:-8080}:8080"
     environment:
-      - PORT=8080
+      APP_ENV: production
+      PORT: "8080"
+      # Behind a reverse proxy, trust its X-Forwarded-For header (comma-separated CIDRs):
+      # TRUSTED_PROXIES: "172.16.0.0/12"
     restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/"]
+      test: ["CMD", "/app/server", "-healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 5s
 
-  # Development service with hot reload
+  # Development with hot reload: open http://localhost:7331 (templ's live-reload proxy)
   dev:
     build:
       context: .
-      dockerfile: Dockerfile
       target: development
     working_dir: /app
     volumes:
       - .:/app
       - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
       - node-modules:/app/node_modules
     ports:
       - "${PORT:-8080}:8080"
+      - "${PROXY_PORT:-7331}:7331"
     environment:
-      - PORT=8080
+      APP_ENV: development
+      PORT: "8080"
+      PROXY_BIND: 0.0.0.0
     command: make dev
     profiles:
       - dev
 
 volumes:
   go-mod-cache:
+  go-build-cache:
   node-modules:

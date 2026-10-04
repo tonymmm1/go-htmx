@@ -9,10 +9,14 @@ COMPARISON.md
 QUICKSTART.md
 LICENSE
 
-# CI/CD
+# CI/CD and container config
 .github
+Dockerfile
+.dockerignore
+docker-compose*.yml
 
-# IDE
+# IDE / agent state
+.claude
 .vscode
 .idea
 *.swp
@@ -34,7 +38,7 @@ static/css
 
 # Environment
 .env
-.env.local
+.env.*
 
 # OS
 .DS_Store
