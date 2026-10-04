@@ -24,8 +24,9 @@ internal/server/server.go   http.ServeMux:
 5. Rate limiter: 100 requests/minute per client IP (IPv6 grouped by /64). `/static/` and `/healthz` are
    exempt. The client IP comes from `X-Forwarded-For` only when the TCP peer is in `TRUSTED_PROXIES`.
 6. `http.NewCrossOriginProtection()`: rejects cross-site POST/PUT/PATCH/DELETE (CSRF).
-7. `gzipResponses`: compresses text-like responses unless `Content-Encoding` is already set; pooled
-   writers; supports `Flush`.
+7. `gzipResponses`: compresses text-like responses unless `Content-Encoding` is already set (so
+   precompressed static assets pass through); pooled writers; supports `Flush`. gzip only: Brotli is
+   used just for static assets, compressed once at startup.
 
 Server limits (`internal/server/server.go`): ReadHeaderTimeout 5s, ReadTimeout 15s, WriteTimeout 30s,
 IdleTimeout 120s, 5s graceful shutdown. HTTP/1.1 and cleartext HTTP/2 (h2c).
@@ -59,11 +60,17 @@ everything else is an event listener on `document` (so it survives hx-boost body
 ## Static assets (`static/static.go`)
 
 - **Production:** directories in the `//go:embed all:css img js` line are compiled into the binary. At
-  startup each file is hashed (SHA-256, 12 hex chars) and text-like files are gzipped once.
+  startup each file is hashed (SHA-256, 12 hex chars) and text-like files are compressed once with
+  Brotli (quality 11, via `github.com/andybalholm/brotli`) and gzip (level 9); a variant is kept only
+  if it is smaller than the original. `negotiateEncoding` picks br > gzip > identity from
+  `Accept-Encoding` (q-values, `q=0`, `*`; ties prefer br). Responses carry `Vary: Accept-Encoding`
+  and per-variant ETags (`"<hash>-br"`, `"<hash>-gz"`, `"<hash>"`); Range requests get the identity
+  bytes. Brotli adds roughly 200ms to startup for the default assets (logged on startup).
   `static.Path("css/styles.css")` returns `/static/css/styles.css?v=<hash>`. Requests with the current
   hash get `Cache-Control: public, max-age=31536000, immutable`; others get `max-age=300` plus an ETag.
 - **Development** (`APP_ENV=development`): files are read from `static/` on disk on every request with
-  `Cache-Control: no-cache`; `static.Path` returns unversioned URLs and panics if the file is missing.
+  `Cache-Control: no-cache` and are not precompressed (only `gzipResponses` applies); `static.Path`
+  returns unversioned URLs and panics if the file is missing.
 - Dotfiles, `.go` files and directories are never served.
 - `static/css/` is Tailwind output (gitignored apart from `.gitkeep`). `make css` builds it, and it must
   exist before `go build` for production, because it is embedded at compile time.

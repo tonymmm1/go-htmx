@@ -8,12 +8,12 @@ common alternatives, and where it falls short.
 | | go-htmx | Next.js / Nuxt |
 |---|---|---|
 | Rendering | Server-rendered HTML; htmx swaps HTML fragments | SSR/SSG plus client-side hydration |
-| Client JavaScript | htmx 2.0.10 + a small `app.js` (~18 KB gzipped together) | Framework runtime plus your components |
+| Client JavaScript | htmx 2.0.10 + a small `app.js` (~16 KB with Brotli together) | Framework runtime plus your components |
 | Routing | Explicit `net/http` routes; `make new-page` adds them | File-based |
 | Type safety | Go + templ, checked at compile time | TypeScript |
 | Dev reload | templ watcher (browser reload, server restart) + Tailwind watch | Vite / Fast Refresh with state preservation |
-| Production artifact | One ~8 MB static binary with assets embedded | Build output + `node_modules`, Node.js runtime |
-| Container | ~19 MB distroless image | Typically a Node base image, much larger |
+| Production artifact | One ~9 MB static binary with assets embedded | Build output + `node_modules`, Node.js runtime |
+| Container | ~20 MB distroless image | Typically a Node base image, much larger |
 | Toolchain | Go, plus the Tailwind standalone CLI (no Node.js) | Node.js, npm |
 | Ecosystem | Go modules; any CSS/JS you vendor into `static/` | npm, component libraries |
 
@@ -29,13 +29,13 @@ your team and component library are already JavaScript-first.
 |---|---|---|
 | Templates | templ: typed parameters, compile-time errors | Parsed at runtime, errors surface per request |
 | Full page vs. fragment | `RenderPage` / `Render` handle htmx and boosted requests, `Vary` headers | Write it yourself |
-| Static assets | Embedded, content-hashed URLs, immutable caching, ETags, precompressed gzip | `http.FileServer`, manual cache busting |
+| Static assets | Embedded, content-hashed URLs, immutable caching, ETags, precompressed Brotli and gzip | `http.FileServer`, manual cache busting |
 | Middleware | Logging, recovery, CSP and security headers, CSRF, rate limiting, gzip | Write or pick each one |
 | Server | Timeouts, graceful shutdown, h2c, `/healthz`, `-healthcheck` | Write it yourself |
 | Tooling | `make dev`, generators, `make check`, CI, Dockerfile | Set up yourself |
 
-Everything here is plain Go with two direct dependencies (templ and godotenv), so you can read, change or
-delete any part of it.
+Everything here is plain Go with three direct dependencies (templ, godotenv and brotli), so you can read,
+change or delete any part of it.
 
 ## Limitations
 

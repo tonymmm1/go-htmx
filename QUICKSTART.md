@@ -114,7 +114,7 @@ make check   # format check, go vet + staticcheck, race tests, generator test, b
 
 ```bash
 make build && ./bin/server   # single binary, assets embedded
-make docker-up               # or a ~19 MB distroless image
+make docker-up               # or a ~20 MB distroless image
 ```
 
 The app runs in production mode unless `APP_ENV=development` is set; note that `./bin/server` also loads

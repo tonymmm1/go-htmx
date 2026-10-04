@@ -3,14 +3,17 @@
 // In production the asset directories listed in the //go:embed directive below
 // are compiled into the binary, so a deployment only needs the executable. At
 // startup every file is hashed (SHA-256, first 12 hex characters) and
-// compressible files are gzipped once at maximum compression and kept in
-// memory:
+// compressible files are compressed once with Brotli (quality 11) and gzip
+// (level 9) and kept in memory; a variant is kept only if it is smaller than
+// the original:
 //
 //   - Path returns "/static/<name>?v=<hash>". Requests carrying the current
 //     hash are cached for a year as immutable; any other request gets a short
 //     cache lifetime and revalidates with an ETag (If-None-Match -> 304).
-//   - Clients that accept gzip receive the precompressed bytes (unless they
-//     send a Range header); everyone else gets the identity bytes.
+//   - The encoding is negotiated from Accept-Encoding (q-values, q=0 and "*"
+//     are honored): Brotli is preferred over gzip, and gzip over the identity
+//     bytes. Each variant has its own ETag ("<hash>-br", "<hash>-gz",
+//     "<hash>"). Range requests always get the identity bytes.
 //   - Dotfiles, Go source files and directories are never served (404).
 //
 // In development (Configure(true, dir)) files are read from dir on every
@@ -48,6 +51,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/andybalholm/brotli"
 )
 
 // embedded holds the production assets. css/ is Tailwind build output and is
@@ -68,6 +73,7 @@ const (
 type asset struct {
 	data  []byte
 	gz    []byte // nil unless gzip is smaller than data
+	br    []byte // nil unless Brotli is smaller than data
 	ctype string
 	hash  string
 }
@@ -95,6 +101,7 @@ func Configure(dev bool, dir string) {
 	if dev {
 		fsys = os.DirFS(dir)
 	}
+	start := time.Now()
 	a, err := build(fsys, dev)
 	if err != nil {
 		panic(fmt.Sprintf("static: %v", err))
@@ -103,12 +110,14 @@ func Configure(dev bool, dir string) {
 		a.embedded = embedded
 		log.Printf("static: serving assets from %s (development)", dir)
 	} else {
-		var raw, gz int
+		var raw, gz, br int
 		for _, f := range a.files {
 			raw += len(f.data)
-			gz += len(f.served())
+			gz += len(f.body(negotiateEncoding("gzip", f.br != nil, f.gz != nil)))
+			br += len(f.body(negotiateEncoding("br, gzip", f.br != nil, f.gz != nil)))
 		}
-		log.Printf("static: serving %d embedded assets (%d bytes, %d gzipped)", len(a.files), raw, gz)
+		log.Printf("static: serving %d embedded assets (%d bytes, %d gzip, %d br; prepared in %s)",
+			len(a.files), raw, gz, br, time.Since(start).Round(time.Millisecond))
 	}
 	current.Store(a)
 }
@@ -167,12 +176,8 @@ func build(fsys fs.FS, dev bool) (*assets, error) {
 			hash:  hex.EncodeToString(sum[:])[:hashLen],
 		}
 		if compressible(f.ctype) {
-			gz, err := gzipBytes(data)
-			if err != nil {
+			if err := f.compress(); err != nil {
 				return fmt.Errorf("compressing %s: %w", name, err)
-			}
-			if len(gz) < len(data) {
-				f.gz = gz
 			}
 		}
 		a.files[name] = f
@@ -217,18 +222,28 @@ func serve(w http.ResponseWriter, r *http.Request) {
 		h.Set("Cache-Control", revalidateCache)
 	}
 
-	body, etag := f.data, `"`+f.hash+`"`
-	if f.gz != nil {
+	coding := ""
+	if f.br != nil || f.gz != nil {
 		h.Add("Vary", "Accept-Encoding")
 		// Ranges are only served from the identity bytes.
-		if r.Header.Get("Range") == "" && acceptsGzip(r.Header.Get("Accept-Encoding")) {
-			h.Set("Content-Encoding", "gzip")
-			// ServeContent omits Content-Length when Content-Encoding is set.
-			h.Set("Content-Length", strconv.Itoa(len(f.gz)))
-			body, etag = f.gz, `"`+f.hash+`-gz"`
+		if r.Header.Get("Range") == "" {
+			accept := strings.Join(r.Header.Values("Accept-Encoding"), ",")
+			coding = negotiateEncoding(accept, f.br != nil, f.gz != nil)
 		}
 	}
-	h.Set("ETag", etag)
+	body, etag := f.body(coding), f.hash
+	switch coding {
+	case "br":
+		etag += "-br"
+	case "gzip":
+		etag += "-gz"
+	}
+	h.Set("ETag", `"`+etag+`"`)
+	if coding != "" {
+		h.Set("Content-Encoding", coding)
+		// ServeContent omits Content-Length when Content-Encoding is set.
+		h.Set("Content-Length", strconv.Itoa(len(body)))
+	}
 
 	// ServeContent handles HEAD, If-None-Match, Range and Content-Length.
 	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(body))
@@ -297,11 +312,36 @@ func (a *assets) warnOnce(name, format string, args ...any) {
 	}
 }
 
-func (f *asset) served() []byte {
-	if f.gz != nil {
+// body returns the bytes to send for a coding chosen by negotiateEncoding:
+// "br", "gzip" or "" (identity).
+func (f *asset) body(coding string) []byte {
+	switch {
+	case coding == "br" && f.br != nil:
+		return f.br
+	case coding == "gzip" && f.gz != nil:
 		return f.gz
 	}
 	return f.data
+}
+
+// compress stores the gzip and Brotli variants of f.data, each only if it is
+// smaller than the original.
+func (f *asset) compress() error {
+	gz, err := gzipBytes(f.data)
+	if err != nil {
+		return err
+	}
+	if len(gz) < len(f.data) {
+		f.gz = gz
+	}
+	br, err := brotliBytes(f.data)
+	if err != nil {
+		return err
+	}
+	if len(br) < len(f.data) {
+		f.br = br
+	}
+	return nil
 }
 
 // servable rejects dotfiles (at any depth) and Go source files.
@@ -356,14 +396,51 @@ func gzipBytes(data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// acceptsGzip reports whether an Accept-Encoding header allows gzip,
-// honoring q=0 and the "*" wildcard.
-func acceptsGzip(header string) bool {
-	gzipQ, wildcardQ := -1.0, -1.0
+// brotliBytes compresses data at the highest quality. The window is the
+// smallest that covers the whole input, which keeps the decoder's memory use
+// small for small files without costing compression.
+func brotliBytes(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	bw := brotli.NewWriterOptions(&buf, brotli.WriterOptions{
+		Quality: brotli.BestCompression,
+		LGWin:   brotliWindow(len(data)),
+	})
+	if _, err := bw.Write(data); err != nil {
+		return nil, err
+	}
+	if err := bw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// brotliWindow returns the base-2 log of the smallest Brotli window (10 to 24)
+// that can reference all n bytes. Brotli windows hold 2^lgwin-16 bytes.
+func brotliWindow(n int) int {
+	lgwin := 10
+	for lgwin < 24 && 1<<lgwin-16 < n {
+		lgwin++
+	}
+	return lgwin
+}
+
+// negotiateEncoding picks the content coding to serve from an Accept-Encoding
+// header, given which precompressed variants exist: "br", "gzip" or "" for the
+// identity bytes. A coding is acceptable if its q-value (or, if it is not
+// listed, the q-value of "*") is above zero; the highest q-value wins and ties
+// prefer br over gzip. Codings missing from the header are not acceptable,
+// so an empty header gets the identity bytes. The identity bytes are always
+// the fallback; an "identity" entry in the header is ignored.
+func negotiateEncoding(header string, haveBr, haveGzip bool) string {
+	brQ, gzipQ, wildcardQ := -1.0, -1.0, -1.0
 	for part := range strings.SplitSeq(header, ",") {
 		coding, params, _ := strings.Cut(part, ";")
 		q := 1.0
-		if name, value, ok := strings.Cut(strings.TrimSpace(params), "="); ok && strings.TrimSpace(name) == "q" {
+		for param := range strings.SplitSeq(params, ";") {
+			name, value, ok := strings.Cut(param, "=")
+			if !ok || !strings.EqualFold(strings.TrimSpace(name), "q") {
+				continue
+			}
 			parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
 			if err != nil {
 				parsed = 0
@@ -371,14 +448,32 @@ func acceptsGzip(header string) bool {
 			q = parsed
 		}
 		switch strings.ToLower(strings.TrimSpace(coding)) {
+		case "br":
+			brQ = q
 		case "gzip", "x-gzip":
 			gzipQ = q
 		case "*":
 			wildcardQ = q
 		}
 	}
-	if gzipQ >= 0 {
-		return gzipQ > 0
+	if brQ < 0 {
+		brQ = wildcardQ
 	}
-	return wildcardQ > 0
+	if gzipQ < 0 {
+		gzipQ = wildcardQ
+	}
+	if !haveBr {
+		brQ = 0
+	}
+	if !haveGzip {
+		gzipQ = 0
+	}
+
+	switch {
+	case brQ > 0 && brQ >= gzipQ:
+		return "br"
+	case gzipQ > 0:
+		return "gzip"
+	}
+	return ""
 }

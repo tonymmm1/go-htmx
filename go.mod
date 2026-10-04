@@ -4,12 +4,12 @@ go 1.27
 
 require (
 	github.com/a-h/templ v0.3.1020
+	github.com/andybalholm/brotli v1.2.0
 	github.com/joho/godotenv v1.5.1
 )
 
 require (
 	github.com/a-h/parse v0.0.0-20250122154542-74294addb73e // indirect
-	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cli/browser v1.3.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect

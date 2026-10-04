@@ -11,14 +11,17 @@ embedded, and needs no Node.js: CSS is built with the Tailwind standalone CLI.
 
 ## Why it's lightweight
 
-- **The whole home page is about 34 KB gzipped**, including the stylesheet (~15 KB), htmx (~17 KB) and
-  the app script (~1.5 KB). No client framework and no CDN: htmx 2.0.10 is vendored in `static/js/`.
-- **An ~8 MB static binary** (`CGO_ENABLED=0`, stripped) contains the server, the compiled templates and
+- **The whole home page is about 30 KB with Brotli** (34 KB gzipped), including the stylesheet (~12 KB),
+  htmx (~15 KB) and the app script (~1 KB). No client framework and no CDN: htmx 2.0.10 is vendored in
+  `static/js/`.
+- **A ~9 MB static binary** (`CGO_ENABLED=0`, stripped) contains the server, the compiled templates and
   every static asset.
-- **A ~19 MB container image**: `gcr.io/distroless/static-debian12:nonroot` plus the binary, nothing else.
+- **A ~20 MB container image**: `gcr.io/distroless/static-debian12:nonroot` plus the binary, nothing else.
 - **Assets are cached forever and served precompressed.** URLs carry a content hash
-  (`/static/css/styles.css?v=<hash>`), are served `immutable` for a year, and are gzipped once at startup.
-- **Two direct Go dependencies**: templ and godotenv. Everything else is the standard library.
+  (`/static/css/styles.css?v=<hash>`), are served `immutable` for a year, and are compressed once at
+  startup with Brotli and gzip; each client gets the best encoding it accepts.
+- **Three direct Go dependencies**: templ, godotenv and [brotli](https://github.com/andybalholm/brotli)
+  (pure Go, used to precompress assets). Everything else is the standard library.
 
 ## What's included
 
@@ -81,7 +84,7 @@ templates/
   pages/*.templ           Pages (index, about, examples, not-found)
   components/*.templ      Reusable components and htmx fragments
 static/
-  static.go               Embeds and serves assets (go:embed, hashing, gzip, ETags)
+  static.go               Embeds and serves assets (go:embed, hashing, Brotli/gzip, ETags)
   css/                    Tailwind output (generated, gitignored)
   js/app.js               Theme toggle and htmx error toasts
   js/htmx.min.js          Vendored htmx 2.0.10
@@ -195,6 +198,14 @@ Only directories listed in the `//go:embed all:css img js` line in `static/stati
 directories (fonts, etc.) there, or they will 404 in production. In development `static.Path` panics if the
 file doesn't exist and logs a warning if it isn't embedded. Dotfiles and `.go` files are never served.
 
+In production every compressible asset is compressed once at startup with Brotli (quality 11) and gzip
+(level 9), keeping each variant only if it is smaller than the original. Clients get Brotli if they accept
+it, otherwise gzip, otherwise the original bytes (`Accept-Encoding` q-values are honored), with
+`Vary: Accept-Encoding` and a per-variant ETag. Range requests are served from the original bytes.
+Brotli at quality 11 adds about 0.2 seconds to startup for the default assets; the startup log
+line reports the time and the total sizes. In development assets are read from disk and not precompressed
+(the gzip middleware still compresses text responses).
+
 ### Styling
 
 Themes are configured in `styles/input.css` (`light --default, dark --prefersdark`). With no saved
@@ -242,8 +253,9 @@ The middleware stack (`internal/middleware`), outermost first:
    the proxy's limit.
 6. **CSRF protection**: `http.CrossOriginProtection` rejects cross-origin `POST`/`PUT`/`PATCH`/`DELETE`
    from browsers using `Sec-Fetch-Site` and `Origin`. No tokens needed.
-7. **gzip** for text, JSON, JavaScript, XML and SVG responses. Precompressed assets and
-   `text/event-stream` pass through untouched.
+7. **gzip** for text, JSON, JavaScript, XML and SVG responses. Precompressed (Brotli or gzip) static
+   assets and `text/event-stream` pass through untouched. Dynamic responses are not Brotli-compressed:
+   Brotli's high levels are too slow per request.
 
 The server sets read-header (5s), read (15s), write (30s) and idle (120s) timeouts, caps headers at 64 KB
 and gives in-flight requests 5s to finish on `SIGINT`/`SIGTERM`. Streaming handlers (SSE) must extend the
