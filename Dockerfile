@@ -1,59 +1,49 @@
-ARG GO_VERSION=1.27.0
+# syntax=docker/dockerfile:1
+
+ARG GO_VERSION=1.27
 ARG NODE_VERSION=24
-ARG TEMPL_VERSION=v0.3.1020
 
-FROM node:${NODE_VERSION}-bookworm-slim AS node-runtime
+FROM node:${NODE_VERSION}-bookworm-slim AS node
 
-FROM golang:${GO_VERSION}-bookworm AS toolchain
-
-# Use the same supported Node.js toolchain for development and production builds.
-COPY --from=node-runtime /usr/local/ /usr/local/
-
+# --- CSS: Tailwind only needs node_modules, styles/ and the sources it scans
+#     (see the @source lines in styles/input.css)
+FROM node AS css
 WORKDIR /app
-
-FROM toolchain AS development
-
-FROM toolchain AS builder
-
-ARG TEMPL_VERSION
-
-
-COPY go.mod go.sum ./
-RUN go mod download
-
 COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY . .
-
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+COPY styles ./styles
+COPY templates ./templates
+COPY internal ./internal
+COPY static ./static
 RUN npm run build:css
-RUN go tool templ generate
-RUN CGO_ENABLED=0 go build \
-    -ldflags="-s -w" \
-    -o server \
-    ./cmd/server
 
-FROM debian:bookworm-slim
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
-
+# --- Development: Go + Node toolchain for `docker compose --profile dev up dev`
+FROM golang:${GO_VERSION}-bookworm AS development
+COPY --from=node /usr/local/ /usr/local/
 WORKDIR /app
+EXPOSE 8080 7331
+CMD ["make", "dev"]
 
-COPY --from=builder /app/server .
-COPY --from=builder /app/static ./static
+# --- Build: static Go binary (static/ is embedded into it)
+FROM golang:${GO_VERSION}-bookworm AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY . .
+COPY --from=css /app/static/css ./static/css
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go tool templ generate && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
 
-RUN groupadd -g 1000 appuser && \
-    useradd -u 1000 -g appuser -s /bin/bash -m appuser && \
-    chown -R appuser:appuser /app
-
-USER appuser
-
+# --- Runtime: just the binary
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /app
+COPY --from=build /out/server /app/server
+ENV APP_ENV=production \
+    PORT=8080
+USER nonroot
 EXPOSE 8080
-
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
-
-CMD ["./server"]
+    CMD ["/app/server", "-healthcheck"]
+ENTRYPOINT ["/app/server"]

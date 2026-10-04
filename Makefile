@@ -1,147 +1,201 @@
 # Makefile – go-htmx stack
 
-PORT      ?= 8080
-IMAGE     ?= gohtmx
-CONTAINER ?= gohtmx-dev
-AIR_VERSION   ?= v1.67.4
-TEMPL_VERSION ?= v0.3.1020
+# PORT comes from the environment, then .env, then defaults to 8080
+ENV_PORT   := $(shell sed -n 's/^PORT=//p' .env 2>/dev/null | tr -d "\"' ")
+PORT       ?= $(or $(ENV_PORT),8080)
+PROXY_PORT ?= 7331
+PROXY_BIND ?= 127.0.0.1
+IMAGE      ?= gohtmx
+CONTAINER  ?= gohtmx-dev
 
-.PHONY: all dev build docker-build docker-up docker-down compose-up compose-dev compose-down clean tools deps setup new-page new-component test test-generators
+STATICCHECK_VERSION ?= v0.8.1
+GOVULNCHECK_VERSION ?= v1.8.0
+
+GO_BUILD := CGO_ENABLED=0 go build -trimpath -ldflags="-s -w"
+# Directories holding Go code (avoids walking node_modules and friends).
+GO_DIRS  := cmd internal static templates
+
+.DEFAULT_GOAL := help
+
+.PHONY: all help setup tools deps generate css dev watch-templ watch-css \
+	build run test test-race test-generators fmt fmt-check vet lint check audit \
+	docker-build docker-up docker-down compose-up compose-dev compose-down \
+	clean clean-all new-page new-component
 
 all: dev
 
-# One-command setup (like create-nuxt-app)
+## Setup ---------------------------------------------------------------------
+
+# One-command setup: fixes module paths, creates .env, installs deps, builds CSS
 setup:
 	@bash setup.sh
 
-# Install Go tools
+# templ is pinned as a Go tool in go.mod, so downloading modules is enough
 tools:
-	@echo "Installing Go tools..."
-	@go install github.com/air-verse/air@$(AIR_VERSION)
-	
-	@echo "Tools installed successfully"
-
-# Install dependencies
-deps:
-	@echo "Installing dependencies..."
 	@go mod download
-	@npm install
-	@echo "Dependencies installed"
 
-# Generate templ files and start development server
-dev: tools deps
-	@echo "Starting development server..."
-	@mkdir -p static/css
-	@go tool templ generate
-	@npx concurrently \
-		"go tool templ generate --watch --proxy='http://localhost:$(PORT)' --open-browser=false" \
-		"npm run dev:css" \
-		"air" \
-		--names "templ,css,go" \
-		--prefix-colors "blue,green,yellow" \
-		--kill-others-on-fail
+deps: node_modules/.package-lock.json
+	@go mod download
 
-# Build for production
-build: deps
-	@echo "Building for production..."
-	@mkdir -p bin static/css
-	@npm run build:css
+# Reinstall npm packages only when package.json or the lockfile changes
+node_modules/.package-lock.json: package.json package-lock.json
+	@npm install --no-audit --no-fund
+	@touch $@
+
+## Code generation -------------------------------------------------------------
+
+generate:
 	@go tool templ generate
-	@go build -ldflags="-s -w" -o bin/server ./cmd/server
+
+css: node_modules/.package-lock.json
+	@npm run --silent build:css
+
+## Development ------------------------------------------------------------------
+
+# Hot reload: templ watches .templ and .go files, regenerates code, restarts the
+# server (`go run`) on Go changes and reloads the browser through its proxy.
+# Open http://localhost:$(PROXY_PORT) (the proxy) rather than :$(PORT).
+dev: node_modules/.package-lock.json
+	@echo "Dev server: http://localhost:$(PROXY_PORT) (proxying :$(PORT))"
+	@$(MAKE) --no-print-directory -j2 watch-templ watch-css
+
+watch-templ:
+	@APP_ENV=development PORT=$(PORT) go tool templ generate --watch \
+		--cmd="go run ./cmd/server" \
+		--proxy="http://localhost:$(PORT)" \
+		--proxyport=$(PROXY_PORT) --proxybind=$(PROXY_BIND) \
+		--open-browser=false
+
+watch-css:
+	@npm run --silent dev:css
+
+## Build ------------------------------------------------------------------------
+
+build: css generate
+	@$(GO_BUILD) -o bin/server ./cmd/server
 	@echo "Build complete: ./bin/server"
 
-# Run the built binary
 run: build
 	@./bin/server
 
-# Docker build
+## Quality ----------------------------------------------------------------------
+
+# Tests need the CSS because static/ embeds it
+test: css generate
+	@go test ./...
+
+test-race: css generate
+	@CGO_ENABLED=1 go test -race ./...
+
+# Verify generators still compile after a module rename
+test-generators: css
+	@bash scripts/test-generators.sh
+
+fmt:
+	@gofmt -w $(GO_DIRS)
+	@go tool templ fmt templates
+
+fmt-check:
+	@unformatted="$$(gofmt -l $(GO_DIRS))"; \
+	if [ -n "$$unformatted" ]; then echo "Run 'make fmt'; unformatted Go files:"; echo "$$unformatted"; exit 1; fi
+	@go tool templ fmt -fail templates
+
+vet: generate
+	@go vet ./...
+
+lint: vet
+	@go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) ./...
+
+# Everything CI runs except the dependency audit and the Docker build
+check: fmt-check lint test-race test-generators build
+
+# npm packages are build-time tooling only (just the generated CSS ships), so
+# only critical advisories fail the build; govulncheck covers the shipped binary.
+audit: node_modules/.package-lock.json
+	@npm audit --audit-level=critical
+	@go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+
+## Docker -----------------------------------------------------------------------
+
 docker-build:
 	docker build -t $(IMAGE):latest .
 
-# Docker run (standalone)
 docker-up: docker-build
 	docker run -d --name $(CONTAINER) -p $(PORT):8080 $(IMAGE):latest
 	@echo "Container $(CONTAINER) running on http://localhost:$(PORT)"
 
-# Docker stop and remove (standalone)
 docker-down:
 	docker stop $(CONTAINER) || true
 	docker rm $(CONTAINER) || true
 
-# Docker Compose - production
 compose-up:
-	docker compose up -d
+	docker compose up -d app
 	@echo "Application running on http://localhost:$(PORT)"
 
-# Docker Compose - development with hot reload
 compose-dev:
 	docker compose --profile dev up dev
 
-# Docker Compose - stop
 compose-down:
-	docker compose down
+	docker compose --profile dev down
 
-# Clean build artifacts
+## Cleanup ----------------------------------------------------------------------
+
 clean:
-	@echo "Cleaning build artifacts..."
-	@rm -rf bin/ static/css/ tmp/ node_modules/.cache
+	@rm -rf bin/ tmp/ static/css/* node_modules/.cache
 	@find templates -type f -name "*_templ.go" -delete
 	@echo "Clean complete"
 
-# Deep clean (including dependencies)
 clean-all: clean
-	@echo "Removing all dependencies..."
 	@rm -rf node_modules/
 	@go clean -modcache
 	@echo "Deep clean complete"
 
-# Run tests
-test:
-	@go test -v ./...
+## Generators -------------------------------------------------------------------
 
-# Verify generators still compile after a module rename
-test-generators:
-	@bash scripts/test-generators.sh
-
-# Generate a new page
 new-page:
 	@bash scripts/new-page.sh $(filter-out $@,$(MAKECMDGOALS))
 
-# Generate a new component
 new-component:
 	@bash scripts/new-component.sh $(filter-out $@,$(MAKECMDGOALS))
 
-# Prevent make from treating arguments as targets
+# Lets generator arguments (make new-page about-us) pass through as goals
 %:
 	@:
 
-# Show help
 help:
 	@echo "Go-HTMX Makefile Commands:"
 	@echo ""
 	@echo "Setup & Development:"
-	@echo "  make setup         - 🚀 Complete project setup (run this first!)"
-	@echo "  make dev           - Start development server with hot reload"
-	@echo "  make build         - Build production binary"
-	@echo "  make run           - Build and run the server"
+	@echo "  make setup                - Complete project setup (run this first!)"
+	@echo "  make dev                  - Hot-reload dev server on http://localhost:$(PROXY_PORT)"
+	@echo "  make build                - Build production binary (./bin/server)"
+	@echo "  make run                  - Build and run the server"
+	@echo "  make generate             - Generate Go code from .templ files"
+	@echo "  make css                  - Build minified CSS"
 	@echo ""
 	@echo "Generators:"
 	@echo "  make new-page <name>      - Generate a new page"
 	@echo "  make new-component <name> - Generate a new component"
 	@echo ""
+	@echo "Quality:"
+	@echo "  make test                 - Run tests"
+	@echo "  make test-race            - Run tests with the race detector"
+	@echo "  make test-generators      - Smoke-test project generators"
+	@echo "  make fmt                  - Format Go and templ files"
+	@echo "  make lint                 - go vet + staticcheck"
+	@echo "  make check                - Format check, lint, tests, build (CI)"
+	@echo "  make audit                - npm audit + govulncheck"
+	@echo ""
 	@echo "Docker:"
-	@echo "  make docker-build  - Build Docker image"
-	@echo "  make docker-up     - Build and run Docker container"
-	@echo "  make docker-down   - Stop and remove Docker container"
-	@echo "  make compose-up    - Start with docker-compose (production)"
-	@echo "  make compose-dev   - Start with docker-compose (dev mode)"
-	@echo "  make compose-down  - Stop docker-compose services"
+	@echo "  make docker-build         - Build Docker image"
+	@echo "  make docker-up            - Build and run Docker container"
+	@echo "  make docker-down          - Stop and remove Docker container"
+	@echo "  make compose-up           - Start with docker compose (production)"
+	@echo "  make compose-dev          - Start with docker compose (dev mode)"
+	@echo "  make compose-down         - Stop docker compose services"
 	@echo ""
 	@echo "Maintenance:"
-	@echo "  make test          - Run tests"
-	@echo "  make test-generators - Smoke-test project generators"
-	@echo "  make clean         - Clean build artifacts"
-	@echo "  make clean-all     - Clean everything including dependencies"
-	@echo "  make tools         - Install required Go tools"
-	@echo "  make deps          - Install dependencies"
-	@echo ""
+	@echo "  make deps                 - Install Go and npm dependencies"
+	@echo "  make tools                - Download Go tools (templ is a go.mod tool)"
+	@echo "  make clean                - Clean build artifacts"
+	@echo "  make clean-all            - Clean everything including dependencies"

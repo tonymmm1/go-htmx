@@ -10,13 +10,16 @@ tmp/
 # Test files
 *.test
 *.out
+coverage.*
 
 # Go workspace file
 go.work
+go.work.sum
 
-# Environment files
+# Environment files (.env.example is committed)
 .env
-.env.local
+.env.*
+!.env.example
 
 # Dependencies
 node_modules/
@@ -43,4 +46,3 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
-

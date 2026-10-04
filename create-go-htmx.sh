@@ -3,6 +3,8 @@
 # create-go-htmx: Scaffold a new go-htmx project
 # Usage: bash create-go-htmx.sh [project-name] [module-path]
 # Or: curl -sSL <url> | bash -s -- my-project github.com/you/my-project
+# Or (gonew): go run golang.org/x/tools/cmd/gonew@latest github.com/tonymmm1/go-htmx example.com/you/app
+#             then run `make setup` inside the new directory.
 
 set -e
 
@@ -69,6 +71,8 @@ if [ -z "$MODULE_PATH" ]; then
     echo -e "${BLUE}Using default: $MODULE_PATH${NC}"
 fi
 
+command -v git &> /dev/null || { echo -e "${RED}Error: git is not installed${NC}"; exit 1; }
+
 # Clone template
 echo ""
 echo -e "${BLUE}📦 Cloning template...${NC}"
@@ -80,36 +84,17 @@ echo -e "${BLUE}🧹 Cleaning up...${NC}"
 rm -rf .git
 rm -f create-go-htmx.sh
 
-# Update module path
-echo -e "${BLUE}🔧 Updating module path to $MODULE_PATH...${NC}"
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    sed -i '' "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" go.mod
-    find cmd internal -type f -name "*.go" -exec sed -i '' "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" {} +
-    find templates -type f -name "*.templ" -exec sed -i '' "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" {} +
-else
-    # Linux
-    sed -i "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" go.mod
-    find cmd internal -type f -name "*.go" -exec sed -i "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" {} +
-    find templates -type f -name "*.templ" -exec sed -i "s|github.com/tonymmm1/go-htmx|$MODULE_PATH|g" {} +
-fi
+# setup.sh renames the module, creates .env, installs dependencies and builds
+echo ""
+echo -e "${BLUE}🚀 Running setup (module: $MODULE_PATH)...${NC}"
+bash setup.sh "$MODULE_PATH" < /dev/null
 
-# Initialize git
+# Initialize git (generated files and .env are gitignored)
+echo ""
 echo -e "${BLUE}📝 Initializing git repository...${NC}"
-git init
+git init -q
 git add .
-git commit -m "Initial commit from go-htmx template"
-
-# Run setup
-echo ""
-echo -e "${BLUE}🚀 Running setup...${NC}"
-echo ""
-
-# Make setup script executable
-chmod +x setup.sh
-
-# Run setup
-bash setup.sh
+git commit -q -m "Initial commit from go-htmx template"
 
 # Success
 echo ""
@@ -122,7 +107,5 @@ echo -e "  ${YELLOW}cd $PROJECT_NAME${NC}"
 echo -e "  ${YELLOW}make dev${NC}"
 echo ""
 echo -e "${BLUE}Your app will be available at:${NC}"
-echo -e "  ${GREEN}http://localhost:8080${NC}"
-echo ""
-echo -e "${BLUE}Happy coding! 🚀${NC}"
+echo -e "  ${GREEN}http://localhost:7331${NC} (live reload)"
 echo ""
