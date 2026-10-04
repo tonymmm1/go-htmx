@@ -7,7 +7,7 @@ A small, production-minded starter for server-rendered websites with Go, [htmx](
 It uses the standard library for routing and middleware, builds into one static binary with all assets
 embedded, and needs Node.js only at build time to compile the CSS.
 
-[Quick start guide](QUICKSTART.md) · [Comparison with other approaches](COMPARISON.md)
+[Quick start guide](QUICKSTART.md) · [UI components (daisyUI, shadcn-style)](docs/ui.md) · [Comparison with other approaches](COMPARISON.md) · [Agent instructions](AGENTS.md)
 
 ## Why it's lightweight
 
@@ -87,9 +87,12 @@ static/
   js/htmx.min.js          Vendored htmx 2.0.10
   img/favicon.svg
 styles/input.css          Tailwind entry point (daisyUI themes, custom CSS)
-scripts/                  new-page.sh, new-component.sh, test-generators.sh
+scripts/                  new-page.sh, new-component.sh, test-generators.sh, check-docs.sh
 setup.sh                  Project setup and module rename
 create-go-htmx.sh         Scaffolder: clone, setup, git init
+docs/ui.md                UI library guide (daisyUI, shadcn-style alternatives)
+docs/agents/              Architecture notes and task recipes for coding agents
+AGENTS.md                 Instructions for coding agents (CLAUDE.md imports it)
 ```
 
 ## Adding pages and fragments
@@ -197,6 +200,9 @@ Themes are configured in `styles/input.css` (`light --default, dark --prefersdar
 choice the site follows the OS preference; the toggle switches between light and dark and stores the
 choice in `localStorage`. Custom CSS goes at the end of `styles/input.css`.
 
+[docs/ui.md](docs/ui.md) covers daisyUI conventions and how to switch to a shadcn/ui-style kit
+([Basecoat](https://github.com/hunvreus/basecoat) or [shadcn-templ](https://templui.io/)) within the CSP.
+
 ## Configuration
 
 Settings come from environment variables. `.env` (created from `.env.example` by setup) is loaded if
@@ -286,16 +292,17 @@ Run `make` (or `make help`) for the list.
 | `new-page <name>` / `new-component <name>` | Generators |
 | `test` / `test-race` | `go test ./...` / with the race detector |
 | `test-generators` | Run both generators in a temp copy with a different module path, then vet and test |
+| `check-docs` | Fail if `AGENTS.md`, `docs/ui.md` or `docs/agents/` reference missing files, links or make targets |
 | `fmt` / `fmt-check` | Format Go and templ files / fail if anything is unformatted |
 | `vet` / `lint` | `go vet` / `go vet` + staticcheck |
-| `check` | `fmt-check`, `lint`, `test-race`, `test-generators`, `build` |
+| `check` | `fmt-check`, `lint`, `check-docs`, `test-race`, `test-generators`, `build` |
 | `audit` | `npm audit --audit-level=critical` + govulncheck |
 | `deps` / `tools` | Install Go and npm dependencies / download Go modules (incl. templ) |
 | `docker-build` / `docker-up` / `docker-down` | Standalone image and container |
 | `compose-up` / `compose-dev` / `compose-down` | Docker Compose app, dev profile, stop |
 | `clean` / `clean-all` | Remove build output and generated files / also `node_modules` and the Go module cache |
 
-CI (`.github/workflows/ci.yml`) runs `go mod verify`, `fmt-check`, `lint`, `test-race`,
+CI (`.github/workflows/ci.yml`) runs `go mod verify`, `fmt-check`, `lint`, `check-docs`, `test-race`,
 `test-generators`, `build` and `audit`, then builds the Docker image and smoke-tests it: `/healthz`, the
 home page, the embedded stylesheet, and `server -healthcheck`.
 

@@ -49,6 +49,9 @@ jobs:
       - name: Lint (go vet, staticcheck)
         run: make lint
 
+      - name: Check agent docs references
+        run: make check-docs
+
       - name: Test with race detector
         run: make test-race
 
