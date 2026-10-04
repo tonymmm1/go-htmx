@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -37,34 +38,59 @@ jobs:
           cache: npm
 
       - name: Install npm dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
 
       - name: Verify Go modules
         run: go mod verify
 
-      - name: Generate Templ files
-        run: go tool templ generate
+      - name: Check formatting
+        run: make fmt-check
 
-      - name: Build CSS
-        run: npm run build:css
+      - name: Lint (go vet, staticcheck)
+        run: make lint
 
-      - name: Vet Go code
-        run: go vet ./...
-
-      - name: Test Go code
-        run: go test ./...
+      - name: Test with race detector
+        run: make test-race
 
       - name: Test project generators
-        run: bash scripts/test-generators.sh
+        run: make test-generators
 
       - name: Build application
-        run: go build -trimpath -o bin/server ./cmd/server
+        run: make build
 
-      - name: Audit npm dependencies
-        run: npm audit --audit-level=moderate
+      - name: Audit dependencies (npm audit, govulncheck)
+        run: make audit
 
-      - name: Scan Go dependencies
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+  docker:
+    name: Build container
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
-      - name: Build production container
-        run: docker build --tag go-htmx:ci .
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build production image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: go-htmx:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test container
+        run: |
+          docker run -d --name app -p 8080:8080 go-htmx:ci
+          for i in $(seq 1 20); do
+            curl -fsS -o /dev/null http://127.0.0.1:8080/ && break
+            sleep 0.5
+          done
+          curl -fsS -o /dev/null http://127.0.0.1:8080/
+          docker rm -f app
