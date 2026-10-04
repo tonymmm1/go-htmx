@@ -5,7 +5,7 @@
 A small, production-minded starter for server-rendered websites with Go, [htmx](https://htmx.org/),
 [templ](https://templ.guide/), [Tailwind CSS](https://tailwindcss.com/) 4 and [daisyUI](https://daisyui.com/) 5.
 It uses the standard library for routing and middleware, builds into one static binary with all assets
-embedded, and needs Node.js only at build time to compile the CSS.
+embedded, and needs no Node.js: CSS is built with the Tailwind standalone CLI.
 
 [Quick start guide](QUICKSTART.md) · [UI components (daisyUI, shadcn-style)](docs/ui.md) · [Comparison with other approaches](COMPARISON.md) · [Agent instructions](AGENTS.md)
 
@@ -34,7 +34,7 @@ embedded, and needs Node.js only at build time to compile the CSS.
 
 ## Quick start
 
-Prerequisites: Go 1.27+, Node.js 22+ with npm, and make.
+Prerequisites: Go 1.27+, make and curl. No Node.js or npm.
 
 ```bash
 git clone https://github.com/tonymmm1/go-htmx.git my-project
@@ -47,7 +47,7 @@ Open **http://localhost:7331**. That is templ's live-reload proxy in front of th
 `PORT` (8080). `/examples` shows the htmx demos.
 
 `setup.sh` checks prerequisites, sets the module path and rewrites imports in `.go` and `.templ` files,
-copies `.env.example` to `.env`, installs Go and npm dependencies, generates templ code, builds the CSS and
+copies `.env.example` to `.env`, downloads Go modules and the CSS tools, generates templ code, builds the CSS and
 compiles. It is safe to re-run. To start a project with the scaffolder or `gonew`, see
 [QUICKSTART.md](QUICKSTART.md).
 
@@ -87,7 +87,8 @@ static/
   js/htmx.min.js          Vendored htmx 2.0.10
   img/favicon.svg
 styles/input.css          Tailwind entry point (daisyUI themes, custom CSS)
-scripts/                  new-page.sh, new-component.sh, test-generators.sh, check-docs.sh
+.tools/                   Tailwind standalone CLI + daisyUI bundle (downloaded, gitignored)
+scripts/                  install-tools.sh, new-page.sh, new-component.sh, test-generators.sh, check-docs.sh
 setup.sh                  Project setup and module rename
 create-go-htmx.sh         Scaffolder: clone, setup, git init
 docs/ui.md                UI library guide (daisyUI, shadcn-style alternatives)
@@ -200,6 +201,12 @@ Themes are configured in `styles/input.css` (`light --default, dark --prefersdar
 choice the site follows the OS preference; the toggle switches between light and dark and stores the
 choice in `localStorage`. Custom CSS goes at the end of `styles/input.css`.
 
+The CSS toolchain needs no Node.js. `make tools` (run automatically by `make css`, `make dev` and
+`make setup`) downloads the [Tailwind CSS standalone CLI](https://tailwindcss.com/blog/standalone-cli),
+which has the typography plugin built in, and daisyUI's standalone plugin bundle into `.tools/`. Both are
+pinned to versions and SHA-256 checksums in `scripts/install-tools.sh`; to upgrade, change the versions
+and checksums there.
+
 [docs/ui.md](docs/ui.md) covers daisyUI conventions and how to switch to a shadcn/ui-style kit
 ([Basecoat](https://github.com/hunvreus/basecoat) or [shadcn-templ](https://templui.io/)) within the CSP.
 
@@ -263,7 +270,7 @@ Note that `./bin/server` loads `.env` from the working directory if it exists, s
 
 ### Docker
 
-The multi-stage `Dockerfile` builds the CSS with Node, compiles the binary with Go and copies only the
+The multi-stage `Dockerfile` builds the CSS with the Tailwind standalone CLI, compiles the binary with Go and copies only the
 binary into `gcr.io/distroless/static-debian12:nonroot`. It runs as a non-root user and has a
 `HEALTHCHECK` that runs `/app/server -healthcheck` (distroless has no shell or curl).
 
@@ -296,11 +303,11 @@ Run `make` (or `make help`) for the list.
 | `fmt` / `fmt-check` | Format Go and templ files / fail if anything is unformatted |
 | `vet` / `lint` | `go vet` / `go vet` + staticcheck |
 | `check` | `fmt-check`, `lint`, `check-docs`, `test-race`, `test-generators`, `build` |
-| `audit` | `npm audit --audit-level=critical` + govulncheck |
-| `deps` / `tools` | Install Go and npm dependencies / download Go modules (incl. templ) |
+| `audit` | govulncheck on the Go code |
+| `deps` / `tools` | Download Go modules and CSS tools / download the CSS tools into `.tools/` |
 | `docker-build` / `docker-up` / `docker-down` | Standalone image and container |
 | `compose-up` / `compose-dev` / `compose-down` | Docker Compose app, dev profile, stop |
-| `clean` / `clean-all` | Remove build output and generated files / also `node_modules` and the Go module cache |
+| `clean` / `clean-all` | Remove build output and generated files / also `.tools/` and the Go module cache |
 
 CI (`.github/workflows/ci.yml`) runs `go mod verify`, `fmt-check`, `lint`, `check-docs`, `test-race`,
 `test-generators`, `build` and `audit`, then builds the Docker image and smoke-tests it: `/healthz`, the

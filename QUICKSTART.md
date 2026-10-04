@@ -1,7 +1,7 @@
 # Quick Start
 
-You need Go 1.27+, Node.js 22+ with npm, and make. Node is only used to build the CSS; it isn't needed
-to run the app.
+You need Go 1.27+, make and curl. There's no Node.js or npm: the CSS is built with the Tailwind standalone
+CLI, which setup downloads into `.tools/`.
 
 ## 1. Create a project
 

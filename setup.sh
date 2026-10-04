@@ -5,7 +5,7 @@
 # Usage: bash setup.sh [module-path]
 #
 # Safe to re-run. It:
-#   1. checks prerequisites (Go 1.27+, Node.js 22+, npm, make),
+#   1. checks prerequisites (Go 1.27+, make, curl),
 #   2. optionally sets the module path in go.mod, then rewrites any remaining
 #      template import paths in .go/.templ files (also fixes up projects created
 #      with `gonew`, which only rewrites .go files),
@@ -53,15 +53,8 @@ if [[ ! "$GO_VERSION" =~ ^go([0-9]+)\.([0-9]+) ]] ||
 fi
 ok "Go ${GO_VERSION}"
 
-command -v node &> /dev/null || fail "Node.js is not installed. Please install Node.js 22 or later."
-NODE_VERSION=$(node --version)
-if [[ ! "$NODE_VERSION" =~ ^v([0-9]+)\. ]] || (( BASH_REMATCH[1] < 22 )); then
-    fail "Node.js 22 or later is required (found ${NODE_VERSION})."
-fi
-ok "Node.js ${NODE_VERSION}"
-
-command -v npm &> /dev/null || fail "npm is not installed."
-ok "npm $(npm --version)"
+command -v curl &> /dev/null || fail "curl is not installed (needed to download the Tailwind CLI)."
+ok "curl"
 
 command -v make &> /dev/null || fail "make is not installed."
 ok "make"
@@ -106,7 +99,7 @@ fi
 # --- Dependencies, code generation, CSS ------------------------------------
 step "Installing dependencies..."
 make --no-print-directory deps
-ok "Go modules and npm packages installed"
+ok "Go modules and CSS tools (Tailwind CLI, daisyUI) installed"
 
 step "Generating templ code and CSS..."
 make --no-print-directory generate css

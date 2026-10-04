@@ -14,6 +14,7 @@ common alternatives, and where it falls short.
 | Dev reload | templ watcher (browser reload, server restart) + Tailwind watch | Vite / Fast Refresh with state preservation |
 | Production artifact | One ~8 MB static binary with assets embedded | Build output + `node_modules`, Node.js runtime |
 | Container | ~19 MB distroless image | Typically a Node base image, much larger |
+| Toolchain | Go, plus the Tailwind standalone CLI (no Node.js) | Node.js, npm |
 | Ecosystem | Go modules; any CSS/JS you vendor into `static/` | npm, component libraries |
 
 **Choose go-htmx** for content sites, dashboards, admin panels and internal tools where most state lives
@@ -38,7 +39,8 @@ delete any part of it.
 
 ## Limitations
 
-- **Node.js is required at build time** for Tailwind and daisyUI, though not at runtime.
+- **The Tailwind CLI is a ~110 MB download** (once, into `.tools/`). It replaces Node.js and npm, which
+  this template doesn't need at all.
 - **No database, sessions, authentication or i18n.** Add the libraries you prefer.
 - **No file-based routing.** Routes live in `internal/pages/pages.go`; the page generator inserts them.
 - **The strict CSP rules out inline scripts and `hx-on:*`.** Client code goes in files under `static/js/`.

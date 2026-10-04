@@ -84,5 +84,8 @@ Real environment variables override `.env`. Handlers reach config through `pages
   Tailwind's watcher. `.go` changes restart the server; text-only `.templ` changes reload the browser
   without a restart. The browser URL is the templ proxy (`PROXY_PORT`, default 7331).
 - `make build` → `CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/server ./cmd/server`.
-- The Dockerfile builds CSS in a Node stage and the binary in a Go stage, then copies only the binary into
+- CSS tooling: `scripts/install-tools.sh` (`make tools`) downloads the Tailwind standalone CLI (typography
+  plugin built in) and daisyUI's `daisyui.mjs` into `.tools/`, verifying pinned SHA-256 checksums.
+  `styles/input.css` loads the plugin with `@plugin "../.tools/daisyui.mjs"`. There is no Node.js or npm.
+- The Dockerfile installs the CSS tools and builds the CSS and binary in a Go stage, then copies only the binary into
   `gcr.io/distroless/static-debian12:nonroot`. The `HEALTHCHECK` runs `/app/server -healthcheck`.
