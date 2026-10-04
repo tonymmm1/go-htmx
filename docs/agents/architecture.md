@@ -65,7 +65,7 @@ everything else is an event listener on `document` (so it survives hx-boost body
   if it is smaller than the original. `negotiateEncoding` picks br > gzip > identity from
   `Accept-Encoding` (q-values, `q=0`, `*`; ties prefer br). Responses carry `Vary: Accept-Encoding`
   and per-variant ETags (`"<hash>-br"`, `"<hash>-gz"`, `"<hash>"`); Range requests get the identity
-  bytes. Brotli adds roughly 250ms to startup for the default assets (logged on startup).
+  bytes. Brotli adds roughly 200ms to startup for the default assets (logged on startup).
   `static.Path("css/styles.css")` returns `/static/css/styles.css?v=<hash>`. Requests with the current
   hash get `Cache-Control: public, max-age=31536000, immutable`; others get `max-age=300` plus an ETag.
 - **Development** (`APP_ENV=development`): files are read from `static/` on disk on every request with

@@ -11,7 +11,7 @@ embedded, and needs no Node.js: CSS is built with the Tailwind standalone CLI.
 
 ## Why it's lightweight
 
-- **The whole home page is about 30 KB with Brotli** (35 KB gzipped), including the stylesheet (~13 KB),
+- **The whole home page is about 30 KB with Brotli** (34 KB gzipped), including the stylesheet (~12 KB),
   htmx (~15 KB) and the app script (~1 KB). No client framework and no CDN: htmx 2.0.10 is vendored in
   `static/js/`.
 - **A ~9 MB static binary** (`CGO_ENABLED=0`, stripped) contains the server, the compiled templates and
@@ -202,7 +202,7 @@ In production every compressible asset is compressed once at startup with Brotli
 (level 9), keeping each variant only if it is smaller than the original. Clients get Brotli if they accept
 it, otherwise gzip, otherwise the original bytes (`Accept-Encoding` q-values are honored), with
 `Vary: Accept-Encoding` and a per-variant ETag. Range requests are served from the original bytes.
-Brotli at quality 11 adds about a quarter of a second to startup for the default assets; the startup log
+Brotli at quality 11 adds about 0.2 seconds to startup for the default assets; the startup log
 line reports the time and the total sizes. In development assets are read from disk and not precompressed
 (the gzip middleware still compresses text responses).
 
