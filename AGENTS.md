@@ -2,6 +2,14 @@
 
 Instructions for coding agents working in this repository. Humans: see README.md.
 
+Read more only when the task needs it:
+
+| Doc | Read it when |
+|---|---|
+| [docs/agents/recipes.md](docs/agents/recipes.md) | Adding a page, fragment, form, component, JS behaviour, asset, config var, middleware or SSE endpoint |
+| [docs/agents/architecture.md](docs/agents/architecture.md) | Changing the server, middleware, rendering, static serving or build tooling |
+| [docs/ui.md](docs/ui.md) | Styling, themes, or adding/replacing a UI library (daisyUI, shadcn-style kits) |
+
 Server-rendered Go web app: `net/http` + [templ](https://templ.guide/) + htmx 2 + Tailwind CSS 4 + daisyUI 5.
 One static binary with all assets embedded. Keep it lightweight: prefer the standard library and avoid new
 dependencies (Go or npm) unless asked.
@@ -76,9 +84,10 @@ func (h *Handler) HandleContact(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-Fragment: return only the swapped element. htmx does not swap 4xx/5xx responses; app.js shows an error toast
-instead. To show inline validation errors, return the form fragment with its error markup and status 200 (or
-change htmx's `responseHandling` in the layout's `htmxConfig`). See `HandleExampleCounter` and
+Fragment: return only the swapped element with `Render(w, r, http.StatusOK, components.X(...))`. htmx does not
+swap 4xx/5xx responses; app.js shows an error toast instead. To show inline validation errors, re-render the
+form with its error markup and status 200. Full examples (fragment, validated form, SSE) are in
+[docs/agents/recipes.md](docs/agents/recipes.md); the live ones are `HandleExampleCounter` and
 `templates/components/examples.templ`.
 
 ## Testing
@@ -86,6 +95,25 @@ change htmx's `responseHandling` in the layout's `htmxConfig`). See `HandleExamp
 Handler tests live next to handlers and go through the real mux (`internal/pages/*_test.go`). When adding a
 page or endpoint, add a test for status and key markup. Middleware and static packages have their own tests;
 keep them passing with `make test-race`.
+
+## Definition of done
+
+1. `.templ` changes regenerated (`make generate`) and formatted (`make fmt`).
+2. New pages and endpoints have tests; new pages are added to the list in `TestPagesAreCSPCompatible`.
+3. User-facing changes to config, commands or structure are reflected in README.md, and in this file or
+   `docs/agents/` if they change a rule or recipe.
+4. `make check` passes (format check, vet, staticcheck, docs references, race tests, generator smoke test,
+   build).
+
+## Don't
+
+- Commit generated or local files: `*_templ.go`, `static/css/styles.css`, `bin/`, `.env`.
+- Loosen the CSP (`'unsafe-inline'`, `'unsafe-eval'`, CDN hosts) or remove security middleware to make
+  something work; restructure the code instead.
+- Add a client-side framework, a CSS framework alongside daisyUI, or new Go/npm dependencies without being
+  asked.
+- Upgrade htmx, templ, Tailwind or daisyUI as a side effect of another task.
+- Push, tag or open PRs unless asked.
 
 ## Gotchas
 

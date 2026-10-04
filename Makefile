@@ -91,7 +91,7 @@ test-race: css generate
 test-generators: css
 	@bash scripts/test-generators.sh
 
-# Verify paths and make targets mentioned in AGENTS.md and docs/ui.md exist
+# Verify paths, links and make targets referenced in the agent docs exist
 check-docs:
 	@bash scripts/check-docs.sh
 

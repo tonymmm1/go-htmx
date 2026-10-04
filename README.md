@@ -91,6 +91,7 @@ scripts/                  new-page.sh, new-component.sh, test-generators.sh, che
 setup.sh                  Project setup and module rename
 create-go-htmx.sh         Scaffolder: clone, setup, git init
 docs/ui.md                UI library guide (daisyUI, shadcn-style alternatives)
+docs/agents/              Architecture notes and task recipes for coding agents
 AGENTS.md                 Instructions for coding agents (CLAUDE.md imports it)
 ```
 
@@ -291,7 +292,7 @@ Run `make` (or `make help`) for the list.
 | `new-page <name>` / `new-component <name>` | Generators |
 | `test` / `test-race` | `go test ./...` / with the race detector |
 | `test-generators` | Run both generators in a temp copy with a different module path, then vet and test |
-| `check-docs` | Fail if `AGENTS.md` or `docs/ui.md` mention files or make targets that don't exist |
+| `check-docs` | Fail if `AGENTS.md`, `docs/ui.md` or `docs/agents/` reference missing files, links or make targets |
 | `fmt` / `fmt-check` | Format Go and templ files / fail if anything is unformatted |
 | `vet` / `lint` | `go vet` / `go vet` + staticcheck |
 | `check` | `fmt-check`, `lint`, `check-docs`, `test-race`, `test-generators`, `build` |
