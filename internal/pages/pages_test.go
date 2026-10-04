@@ -96,6 +96,7 @@ func TestStandardLibraryRouting(t *testing.T) {
 	}{
 		{name: "exact root", method: http.MethodGet, target: "/", want: http.StatusOK},
 		{name: "unknown route", method: http.MethodGet, target: "/missing", want: http.StatusNotFound},
+		{name: "nested unknown route", method: http.MethodGet, target: "/about/missing", want: http.StatusNotFound},
 		{name: "method mismatch", method: http.MethodPost, target: "/about", want: http.StatusMethodNotAllowed},
 	}
 
@@ -110,12 +111,19 @@ func TestStandardLibraryRouting(t *testing.T) {
 }
 
 func performRequest(method, target, form string) *httptest.ResponseRecorder {
+	return performRequestWithHeaders(method, target, form, nil)
+}
+
+func performRequestWithHeaders(method, target, form string, headers map[string]string) *httptest.ResponseRecorder {
 	mux := http.NewServeMux()
 	RegisterPageRoutes(&Handler{}, mux)
 
 	request := httptest.NewRequest(method, target, strings.NewReader(form))
 	if form != "" {
 		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	for name, value := range headers {
+		request.Header.Set(name, value)
 	}
 
 	recorder := httptest.NewRecorder()

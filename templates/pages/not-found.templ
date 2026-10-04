@@ -1,0 +1,23 @@
+package pagetemplates
+
+import "github.com/tonymmm1/go-htmx/templates/layouts"
+
+templ NotFound(path string) {
+	@layouts.Layout(layouts.Meta{
+		Title:       "Page not found",
+		Description: "The page you are looking for does not exist.",
+	}) {
+		<div class="hero flex-1 bg-base-200 py-16">
+			<div class="hero-content text-center">
+				<div class="max-w-md">
+					<p class="font-mono text-6xl font-bold text-primary">404</p>
+					<h1 class="mt-4 text-3xl font-bold">Page not found</h1>
+					<p class="py-6 text-base-content/70">
+						Nothing lives at <code class="break-all">{ path }</code>. It may have moved, or the link may be wrong.
+					</p>
+					<a href="/" class="btn btn-primary">Back to Home</a>
+				</div>
+			</div>
+		</div>
+	}
+}
