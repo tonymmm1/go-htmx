@@ -5,13 +5,12 @@
     "scripts": {
         "dev": "make dev",
         "build": "make build",
-        "dev:css": "tailwindcss -i ./styles/input.css -o ./static/css/styles.css --watch",
+        "dev:css": "tailwindcss -i ./styles/input.css -o ./static/css/styles.css --watch=always",
         "build:css": "tailwindcss -i ./styles/input.css -o ./static/css/styles.css --minify"
     },
     "devDependencies": {
         "@tailwindcss/cli": "^4.3.3",
         "@tailwindcss/typography": "^0.5.20",
-        "concurrently": "^10.0.5",
         "daisyui": "^5.7.22",
         "tailwindcss": "^4.3.3"
     }
