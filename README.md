@@ -2,370 +2,309 @@
 
 [![CI](https://github.com/tonymmm1/go-htmx/actions/workflows/ci.yml/badge.svg)](https://github.com/tonymmm1/go-htmx/actions/workflows/ci.yml)
 
-**The easiest way to start a Go + HTMX web application.** Just like `create-nuxt-app` or `create-react-app`, but for Go!
+A small, production-minded starter for server-rendered websites with Go, [htmx](https://htmx.org/),
+[templ](https://templ.guide/), [Tailwind CSS](https://tailwindcss.com/) 4 and [daisyUI](https://daisyui.com/) 5.
+It uses the standard library for routing and middleware, builds into one static binary with all assets
+embedded, and needs Node.js only at build time to compile the CSS.
 
-A production-ready starter template for building modern web applications with Go, HTMX, Templ, and Tailwind CSS. This template provides a solid foundation with hot-reloading, type-safe templating, and beautiful UI components out of the box.
+[Quick start guide](QUICKSTART.md) · [Comparison with other approaches](COMPARISON.md)
 
-### Why This Template?
+## Why it's lightweight
 
-| Feature | This Template | From Scratch |
-|---------|--------------|--------------|
-| **Setup Time** | 2 minutes | 2+ hours |
-| **Dependencies** | ✅ Auto-installed | ❌ Manual setup |
-| **Hot Reload** | ✅ Included | ❌ Configure yourself |
-| **Page Generation** | ✅ `make new-page` | ❌ Manual creation |
-| **Component Generation** | ✅ `make new-component` | ❌ Manual creation |
-| **Production Ready** | ✅ Docker included | ❌ DIY deployment |
-| **Type-Safe Templates** | ✅ Templ | ❌ html/template |
+- **The whole home page is about 34 KB gzipped**, including the stylesheet (~15 KB), htmx (~17 KB) and
+  the app script (~1.5 KB). No client framework and no CDN: htmx 2.0.10 is vendored in `static/js/`.
+- **An ~8 MB static binary** (`CGO_ENABLED=0`, stripped) contains the server, the compiled templates and
+  every static asset.
+- **A ~19 MB container image**: `gcr.io/distroless/static-debian12:nonroot` plus the binary, nothing else.
+- **Assets are cached forever and served precompressed.** URLs carry a content hash
+  (`/static/css/styles.css?v=<hash>`), are served `immutable` for a year, and are gzipped once at startup.
+- **Two direct Go dependencies**: templ and godotenv. Everything else is the standard library.
 
-📚 **Documentation:** [Quick Start](QUICKSTART.md) | [Framework Comparison](COMPARISON.md)
+## What's included
 
-## Tech Stack
+- `net/http` routing (Go 1.22+ patterns), graceful shutdown, server timeouts, HTTP/1.1 + h2c, `GET /healthz`
+- Middleware: structured request logging (`log/slog`), panic recovery, security headers with a strict
+  Content Security Policy, CSRF protection, per-IP rate limiting, gzip
+- Page rendering that serves full documents to normal and boosted navigation and just the content to
+  plain htmx requests
+- `hx-boost` navigation with a progress bar, a light/dark theme toggle, error toasts for failed htmx
+  requests and a 404 page
+- Working htmx examples at `/examples` (fragment GET, debounced search, form POST)
+- Page and component generators, hot reload via templ's watcher, Docker and GitHub Actions CI
 
-- **[Go](https://go.dev/)** 1.27 - Fast, reliable backend language
-- **[Go net/http](https://pkg.go.dev/net/http)** - Standard library HTTP server and routing
-- **[HTMX](https://htmx.org/)** 2.0.10 - Modern interactivity without JavaScript frameworks
-- **[Templ](https://templ.guide/)** 0.3.1020 - Type-safe Go templating language
-- **[Tailwind CSS](https://tailwindcss.com/)** 4.3.3 - Utility-first CSS framework
-- **[Tailwind Typography](https://github.com/tailwindlabs/tailwindcss-typography)** 0.5.20 - Rich text styling
-- **[DaisyUI](https://daisyui.com/)** 5.7.22 - Beautiful component library for Tailwind
-- **[Air](https://github.com/air-verse/air)** 1.67.4 - Live reload for Go apps
+## Quick start
 
-## Features
-
-✅ Hot-reloading for Go, Templ, and CSS files  
-✅ Type-safe HTML templating with Templ  
-✅ Standard-library middleware (rate limiting, gzip, logging, recovery, security headers)<br>
-✅ Docker support for production deployment  
-✅ Beautiful default UI with DaisyUI components  
-✅ Working HTMX examples with fragment responses<br>
-✅ HTTP/2 support  
-✅ Production-ready project structure  
-✅ GitHub Actions CI for tests, audits, and production builds
-
-## Quick Start
-
-### Prerequisites
-
-- Go 1.27 or later
-- Node.js 22 or later
-- Make
-
-### Three Commands to Get Started
+Prerequisites: Go 1.27+, Node.js 22+ with npm, and make.
 
 ```bash
-# 1. Clone this template (or use it as a GitHub template)
 git clone https://github.com/tonymmm1/go-htmx.git my-project
 cd my-project
-
-# 2. Run setup (installs everything automatically)
-make setup
-# Or: bash setup.sh
-
-# 3. Start development server
+make setup MODULE=github.com/you/my-project   # omit MODULE to keep the module path
 make dev
 ```
 
-That's it! Visit `http://localhost:8080` 🎉
+Open **http://localhost:7331**. That is templ's live-reload proxy in front of the app, which listens on
+`PORT` (8080). `/examples` shows the htmx demos.
 
-Open `http://localhost:8080/examples` to try the included HTMX interactions.
+`setup.sh` checks prerequisites, sets the module path and rewrites imports in `.go` and `.templ` files,
+copies `.env.example` to `.env`, installs Go and npm dependencies, generates templ code, builds the CSS and
+compiles. It is safe to re-run. To start a project with the scaffolder or `gonew`, see
+[QUICKSTART.md](QUICKSTART.md).
 
-The setup command will:
-- ✅ Check prerequisites (Go, Node.js, npm)
-- ✅ Install Go dependencies
-- ✅ Install Go tools (Air, Templ)
-- ✅ Install npm dependencies (Tailwind, DaisyUI, Concurrently)
-- ✅ Generate Templ files
-- ✅ Build initial CSS
-- ✅ Create `.env` file
-- ✅ Set up directory structure
+### The dev loop
 
-### Starting Fresh Project from Template
+`make dev` runs two watchers in parallel:
 
-If you want to use this as a template for a new project:
+- `go tool templ generate --watch`: regenerates Go code from `.templ` files, restarts the server
+  (`go run ./cmd/server`) when Go code changes and reloads the browser through the proxy.
+- Tailwind's watcher: rebuilds `static/css/styles.css` from `styles/input.css` and the classes it finds in
+  `templates/`, `internal/` and `static/js/app.js`.
+
+In development (`APP_ENV=development`) static files are read from disk with `Cache-Control: no-cache`, so
+CSS changes show up on the next page load without a restart. templ is pinned as a Go tool in `go.mod`, so
+there is nothing to install globally: run it as `go tool templ`.
+
+## Project structure
+
+```
+cmd/server/main.go        Entry point: config, logger, signals, -healthcheck flag
+internal/
+  config/                 PORT, APP_ENV, TRUSTED_PROXIES (+ optional .env)
+  server/                 Routes, middleware stack, timeouts, graceful shutdown, /healthz
+  middleware/             Logging, recovery, security headers, rate limit, gzip
+  pages/
+    pages.go              Routes and handlers
+    render.go             RenderPage, Render, IsHTMX, IsBoosted
+templates/
+  layouts/layout.templ    Document shell, nav, theme toggle, toasts
+  layouts/meta.go         layouts.Meta and SiteName
+  pages/*.templ           Pages (index, about, examples, not-found)
+  components/*.templ      Reusable components and htmx fragments
+static/
+  static.go               Embeds and serves assets (go:embed, hashing, gzip, ETags)
+  css/                    Tailwind output (generated, gitignored)
+  js/app.js               Theme toggle and htmx error toasts
+  js/htmx.min.js          Vendored htmx 2.0.10
+  img/favicon.svg
+styles/input.css          Tailwind entry point (daisyUI themes, custom CSS)
+scripts/                  new-page.sh, new-component.sh, test-generators.sh
+setup.sh                  Project setup and module rename
+create-go-htmx.sh         Scaffolder: clone, setup, git init
+```
+
+## Adding pages and fragments
+
+### Pages
 
 ```bash
-# Clone and setup
-git clone https://github.com/tonymmm1/go-htmx.git my-awesome-project
-cd my-awesome-project
-
-# Update module name in go.mod to your own
-# e.g., change "github.com/tonymmm1/go-htmx" to "github.com/yourname/my-awesome-project"
-
-# Run setup (automatically fixes all import paths!)
-make setup
-
-# Start coding!
-make dev
+make new-page contact-us
 ```
 
-**Note:** The `setup` script automatically detects your module path from `go.mod` and updates all imports in your code. No manual find/replace needed!
+This creates `templates/pages/contact-us.templ` and adds `GET /contact-us` and `HandleContactUs` to
+`internal/pages/pages.go`. Add a link to the nav in `templates/layouts/layout.templ` yourself if you want
+one.
 
-## Project Structure
-
-```
-.
-├── src/
-│   ├── cmd/
-│   │   └── main.go           # Application entry point
-│   ├── config/
-│   │   └── config.go         # Configuration management
-│   ├── middleware/
-│   │   └── middleware.go     # HTTP middleware stack
-│   ├── pages/
-│   │   ├── pages.go          # Page and HTMX fragment handlers
-│   │   └── pages_test.go     # Handler examples and tests
-│   ├── server/
-│   │   └── server.go         # HTTP server setup
-│   └── styles/
-│       └── input.css         # Tailwind CSS entry point
-├── templates/
-│   ├── layouts/
-│   │   └── layout.templ      # Base layout template
-│   ├── pages/
-│   │   ├── index.templ       # Home page
-│   │   ├── about.templ       # About page
-│   │   └── examples.templ    # Working HTMX demo page
-│   └── components/
-│       └── examples.templ    # HTMX response fragments
-├── static/
-│   ├── css/                  # Generated CSS (auto-created)
-│   └── images/               # Static assets
-├── scripts/
-│   ├── new-page.sh           # Page generator
-│   └── new-component.sh      # Component generator
-├── Makefile                  # Build automation
-├── Dockerfile                # Production container
-├── docker-compose.yml        # Docker Compose setup
-├── .air.toml                 # Air configuration
-└── go.mod                    # Go dependencies
-```
-
-## Available Commands
-
-### Setup & Development
-```bash
-make setup         # Complete project setup (run this first!)
-make dev           # Start development server with hot reload
-make build         # Build production binary
-make run           # Build and run the server
-```
-
-### Generators (like Nuxt!)
-```bash
-make new-page contact        # Generate a new page
-make new-component card      # Generate a new component
-```
-
-### Docker
-```bash
-make docker-build   # Build Docker image
-make docker-up      # Run Docker container (standalone)
-make docker-down    # Stop Docker container
-make compose-up     # Start with docker-compose (production)
-make compose-dev    # Start with docker-compose (dev with hot reload)
-make compose-down   # Stop docker-compose services
-```
-
-### Maintenance
-```bash
-make test          # Run tests
-make clean         # Clean build artifacts
-make clean-all     # Clean everything including dependencies
-make help          # Show all available commands
-```
-
-## Development Workflow
-
-### Adding New Pages (Automatic!)
-
-Use the page generator (like Nuxt's page generation):
-
-```bash
-make new-page contact
-```
-
-This creates `templates/pages/contact.templ`, adds its handler, and registers
-`GET /contact`. Hyphenated names such as `contact-us` become the valid Templ
-component `ContactUs`, and generated imports always use the module from your
-project's `go.mod`.
-
-### Creating Reusable Components
-
-```bash
-make new-component card
-```
-
-Use components in your templates:
+By hand, a page is a templ component wrapped in `layouts.Layout`:
 
 ```templ
-package pagetemplates
-
-import "your/module/templates/layouts"
-import "your/module/templates/components"
-
-templ MyPage() {
-    @layouts.Layout() {
-        <div>
-            @components.Card("My Card Title")
-        </div>
-    }
+templ About() {
+	@layouts.Layout(layouts.Meta{
+		Title:       "About",
+		Description: "What is included in the Go-HTMX starter template.",
+		Path:        "/about",
+	}) {
+		<div class="container mx-auto px-4 py-8">...</div>
+	}
 }
 ```
 
-### Learning from the HTMX Examples
+`Title` renders as `About · Go-HTMX` (leave it empty for just the site name, set in `layouts.SiteName`),
+`Description` becomes `<meta name="description">`, and `Path` marks the matching nav link as current.
 
-Visit `/examples` for three small, working patterns:
+The handler and route:
 
-- `hx-get` replaces a target with a server-rendered time fragment.
-- A debounced search sends its input value and swaps the result list.
-- `hx-post` submits a counter form and replaces the complete component.
+```go
+mux.HandleFunc("GET /about", h.HandleAbout)
 
-The browser markup lives in `templates/pages/examples.templ`, reusable response
-fragments live in `templates/components/examples.templ`, and the Go handlers are
-in `src/pages/pages.go`.
-
-### Customizing Middleware
-
-Edit `src/middleware/middleware.go` to modify:
-- Rate limiting
-- Response compression
-- Logging and panic recovery
-- Security headers or custom middleware
-
-The default limiter keys requests by the direct TCP peer and intentionally
-ignores forwarded-IP headers. When deploying behind a trusted proxy, configure
-rate limiting at that proxy or add an explicit trusted-proxy policy first. HTMX
-requests are same-origin, so CORS middleware is only needed if you later expose
-an API to other origins.
-
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```bash
-PORT=8080
-# Add other environment variables here
+func (h *Handler) HandleAbout(w http.ResponseWriter, r *http.Request) {
+	RenderPage(w, r, http.StatusOK, pagetemplates.About())
+}
 ```
 
-## Production Deployment
+`RenderPage(w, r, status, page)` decides how much of the page to send:
 
-### Build Binary
+| Request | Response |
+|---------|----------|
+| Normal navigation, boosted link or form (`hx-boost`), history restore | Full document |
+| Other htmx request, e.g. `hx-get="/about" hx-target="#panel"` | Page content only, no `<html>`, nav or footer |
 
-```bash
-make build
-./bin/server
+It sets `Vary: HX-Request, HX-Boosted, HX-History-Restore-Request` so caches keep the two apart. Unknown
+paths fall through to the `GET /` catch-all, which renders the 404 page with `RenderPage`.
+
+### Fragments
+
+Endpoints that htmx swaps into an existing page return a component with `Render`:
+
+```go
+// HandleExampleTime returns only the fragment HTMX swaps into the page.
+func (h *Handler) HandleExampleTime(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	now := time.Now().Format("Mon, 02 Jan 2006 15:04:05 MST")
+	Render(w, r, http.StatusOK, components.ServerTime(now))
+}
 ```
 
-### Docker (Standalone)
+Both functions render into a pooled buffer first, so a template error becomes a clean 500 instead of a
+half-written page. `pages.IsHTMX(r)` and `pages.IsBoosted(r)` are available if a handler needs to branch on
+the request type itself.
+
+### Components
 
 ```bash
-# Build and run with Docker
-make docker-up
-
-# Or manually:
-docker build -t my-app .
-docker run -p 8080:8080 my-app
+make new-component feature-card   # templates/components/feature-card.templ
 ```
 
-### Docker Compose (Recommended)
+Use it from a page with `@components.FeatureCard("Title")` after importing
+`<your module>/templates/components`.
+
+### Frontend rules (CSP)
+
+The Content Security Policy only allows same-origin scripts and styles, so templates must not use inline
+`<script>`, `style="..."` or `hx-on:*` attributes. htmx runs with `allowEval: false` and
+`allowScriptTags: false` (see `htmxConfig` in `templates/layouts/layout.templ`), which also disables
+`hx-vals="js:..."` and event filters like `hx-trigger="click[ctrlKey]"`. Put behaviour in
+`static/js/app.js` (or a new file under `static/js/`) as event listeners on `document`, the way the theme
+toggle and error toasts are written.
+
+`app.js` shows a toast when an htmx request fails (4xx/5xx, network error, timeout). Boosted navigation
+that returns an HTML error page, such as the 404, is swapped in like a normal page load instead.
+
+### Static assets
+
+Reference assets with `static.Path`, which adds the content hash in production:
+
+```templ
+<link rel="stylesheet" href={ static.Path("css/styles.css") }/>
+```
+
+Only directories listed in the `//go:embed all:css img js` line in `static/static.go` are embedded. Add new
+directories (fonts, etc.) there, or they will 404 in production. In development `static.Path` panics if the
+file doesn't exist and logs a warning if it isn't embedded. Dotfiles and `.go` files are never served.
+
+### Styling
+
+Themes are configured in `styles/input.css` (`light --default, dark --prefersdark`). With no saved
+choice the site follows the OS preference; the toggle switches between light and dark and stores the
+choice in `localStorage`. Custom CSS goes at the end of `styles/input.css`.
+
+## Configuration
+
+Settings come from environment variables. `.env` (created from `.env.example` by setup) is loaded if
+present; real environment variables take precedence.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8080` | Port the HTTP server listens on |
+| `APP_ENV` | `production` | `development` serves static files from disk and logs text at debug level; `production` serves embedded assets and logs JSON. Any other value is an error. |
+| `TRUSTED_PROXIES` | (empty) | Comma-separated CIDRs or IPs of reverse proxies whose `X-Forwarded-For` is trusted for the client IP (rate limiting and logs). Empty means the TCP peer address is always used. |
+
+`.env.example` sets `APP_ENV=development`, so a local `.env` runs in development mode. The Makefile reads
+`PORT` from `.env` too, and `make dev` accepts `PROXY_PORT` (default 7331) and `PROXY_BIND` (default
+`127.0.0.1`).
+
+## Security and performance notes
+
+The middleware stack (`internal/middleware`), outermost first:
+
+1. **Request logging**: one `slog` line per request with method, path, status, bytes, `duration_ms` and
+   client IP. `/healthz` is logged at debug level.
+2. **Panic recovery**: logs the stack and returns 500, or aborts the connection if headers were already sent.
+3. **Security headers**: CSP (above), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+   `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`. HSTS is not set; configure it on
+   the TLS-terminating proxy.
+4. **`CONNECT` and `TRACE` are rejected** with 405.
+5. **Rate limiting**: 100 requests per minute per client IP (IPv6 grouped by /64), with `X-RateLimit-*`
+   and `Retry-After` headers. `/static/` and `/healthz` are exempt. Change `requestLimit` and `rateWindow`
+   in `internal/middleware/middleware.go`. Behind a proxy, set `TRUSTED_PROXIES` or every visitor shares
+   the proxy's limit.
+6. **CSRF protection**: `http.CrossOriginProtection` rejects cross-origin `POST`/`PUT`/`PATCH`/`DELETE`
+   from browsers using `Sec-Fetch-Site` and `Origin`. No tokens needed.
+7. **gzip** for text, JSON, JavaScript, XML and SVG responses. Precompressed assets and
+   `text/event-stream` pass through untouched.
+
+The server sets read-header (5s), read (15s), write (30s) and idle (120s) timeouts, caps headers at 64 KB
+and gives in-flight requests 5s to finish on `SIGINT`/`SIGTERM`. Streaming handlers (SSE) must extend the
+write deadline per request, for example:
+
+```go
+_ = http.NewResponseController(w).SetWriteDeadline(time.Time{}) // no deadline for this response
+```
+
+The server speaks HTTP/1.1 and HTTP/2 over cleartext (h2c), so a TLS-terminating proxy can use HTTP/2 to
+reach it.
+
+## Deployment
+
+### Binary
 
 ```bash
-# Production
-make compose-up
+make build                       # ./bin/server, assets embedded
+APP_ENV=production ./bin/server  # production is also the default when APP_ENV is unset
+```
 
-# Development with hot reload
-make compose-dev
+Note that `./bin/server` loads `.env` from the working directory if it exists, so a local `.env` with
+`APP_ENV=development` applies here too.
 
-# Stop
+### Docker
+
+The multi-stage `Dockerfile` builds the CSS with Node, compiles the binary with Go and copies only the
+binary into `gcr.io/distroless/static-debian12:nonroot`. It runs as a non-root user and has a
+`HEALTHCHECK` that runs `/app/server -healthcheck` (distroless has no shell or curl).
+
+```bash
+make docker-up      # build the image and run it on http://localhost:$PORT
+make docker-down
+
+make compose-up     # docker compose: read-only filesystem, all capabilities dropped, healthcheck
+make compose-dev    # hot reload in a container; open http://localhost:7331
 make compose-down
 ```
 
-The Docker image is optimized:
-- ✅ Multi-stage build (~30MB final image)
-- ✅ Non-root user for security
-- ✅ Health checks included
-- ✅ Only contains necessary files
+`server -healthcheck` requests `GET /healthz` on `127.0.0.1:$PORT` and exits 0 on 200, so orchestrators
+can use the binary itself as the probe.
 
-## Customization Guide
+## Make targets
 
-### Change Theme
+Run `make` (or `make help`) for the list.
 
-Edit the DaisyUI plugin block in `src/styles/input.css` to change themes:
+| Target | Description |
+|--------|-------------|
+| `setup` | Run `setup.sh` (keeps the current module path; use `bash setup.sh <module>` to rename) |
+| `dev` | templ watcher + Tailwind watcher, http://localhost:7331 |
+| `build` / `run` | Build `./bin/server` (CSS, templ, static binary) / build and run it |
+| `generate` / `css` | `go tool templ generate` / minified Tailwind build |
+| `new-page <name>` / `new-component <name>` | Generators |
+| `test` / `test-race` | `go test ./...` / with the race detector |
+| `test-generators` | Run both generators in a temp copy with a different module path, then vet and test |
+| `fmt` / `fmt-check` | Format Go and templ files / fail if anything is unformatted |
+| `vet` / `lint` | `go vet` / `go vet` + staticcheck |
+| `check` | `fmt-check`, `lint`, `test-race`, `test-generators`, `build` |
+| `audit` | `npm audit --audit-level=critical` + govulncheck |
+| `deps` / `tools` | Install Go and npm dependencies / download Go modules (incl. templ) |
+| `docker-build` / `docker-up` / `docker-down` | Standalone image and container |
+| `compose-up` / `compose-dev` / `compose-down` | Docker Compose app, dev profile, stop |
+| `clean` / `clean-all` | Remove build output and generated files / also `node_modules` and the Go module cache |
 
-```css
-@plugin "daisyui" {
-  themes: light --default, dark --prefersdark, cupcake, cyberpunk;
-}
-```
-
-### Add Custom CSS
-
-Add styles to `src/styles/input.css`:
-
-```css
-@import "tailwindcss" source(none);
-
-@source "../../templates";
-@source "../";
-
-@plugin "@tailwindcss/typography";
-
-@plugin "daisyui" {
-  themes: light --default, dark --prefersdark, cupcake;
-}
-
-/* Your custom styles */
-.my-custom-class {
-  /* ... */
-}
-```
-
-### Configure the Server
-
-Modify `src/config/config.go` to add more configuration options.
+CI (`.github/workflows/ci.yml`) runs `go mod verify`, `fmt-check`, `lint`, `test-race`,
+`test-generators`, `build` and `audit`, then builds the Docker image and smoke-tests it: `/healthz`, the
+home page, the embedded stylesheet, and `server -healthcheck`.
 
 ## Troubleshooting
 
-### Port Already in Use
-
-```bash
-# Change port in .env
-PORT=3000
-```
-
-### Hot Reload Not Working
-
-```bash
-# Reinstall tools
-make clean
-make tools
-make dev
-```
-
-### Templ Files Not Generating
-
-```bash
-# Manually generate
-templ generate
-
-# Or reinstall templ
-go install github.com/a-h/templ/cmd/templ@v0.3.1020
-```
-
-## Contributing
-
-This is a template repository. Feel free to fork and customize for your needs!
+- **`templ: command not found`**: use `go tool templ ...` or `make generate`; templ isn't installed globally.
+- **Panic `static.Path("css/styles.css") ... has the asset been built?`**: run `make css` (or `make dev`).
+- **Port already in use**: change `PORT` in `.env`, or `PROXY_PORT=7332 make dev` for the proxy.
 
 ## License
 
-MIT License - feel free to use this template for any project.
-
-## Resources
-
-- [Go Documentation](https://go.dev/doc/)
-- [HTMX Documentation](https://htmx.org/docs/)
-- [Templ Documentation](https://templ.guide/)
-- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
-- [DaisyUI Components](https://daisyui.com/components/)
-- [Go net/http Documentation](https://pkg.go.dev/net/http)
+[MIT](LICENSE)

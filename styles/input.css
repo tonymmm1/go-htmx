@@ -1,0 +1,73 @@
+@import "tailwindcss" source(none);
+
+@source "../templates";
+@source "../internal";
+@source "../static/js/app.js";
+
+@plugin "@tailwindcss/typography";
+
+@plugin "daisyui" {
+    themes: light --default, dark --prefersdark;
+}
+
+.htmx-indicator {
+    opacity: 0;
+    transition: opacity 150ms ease-in;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    opacity: 1;
+}
+
+/* Top progress bar for boosted navigation (see layouts.Layout). */
+.page-progress {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 60;
+    height: 3px;
+    background-color: var(--color-primary);
+    transform: scaleX(0);
+    transform-origin: left;
+    pointer-events: none;
+}
+
+.htmx-request.page-progress {
+    animation: page-progress 8s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes page-progress {
+    to {
+        transform: scaleX(0.95);
+    }
+}
+
+/* Theme toggle: show the moon in light mode and the sun in dark mode. With no
+   saved choice, data-theme is unset and the OS preference decides. */
+.theme-toggle .theme-icon-sun,
+[data-theme="dark"] .theme-toggle .theme-icon-moon {
+    display: none;
+}
+
+[data-theme="dark"] .theme-toggle .theme-icon-sun {
+    display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .theme-toggle .theme-icon-moon {
+        display: none;
+    }
+
+    :root:not([data-theme]) .theme-toggle .theme-icon-sun {
+        display: block;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .htmx-request.page-progress {
+        animation: none;
+        transform: scaleX(1);
+    }
+}
+
+/* Custom styles can go here */

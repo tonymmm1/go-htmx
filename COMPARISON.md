@@ -1,194 +1,46 @@
-# Framework Comparison
+# How go-htmx compares
 
-## Go-HTMX vs Other Frameworks
+This template is one way to build a server-rendered site. Here is what it gives you relative to two
+common alternatives, and where it falls short.
 
-### Similar Developer Experience to Nuxt/Next.js
+## vs. Next.js / Nuxt
 
-| Feature | go-htmx | Nuxt.js | Next.js |
-|---------|---------|---------|---------|
-| **One-command setup** | ✅ `make setup` | ✅ `npx nuxi init` | ✅ `npx create-next-app` |
-| **Hot reload** | ✅ Air + Templ | ✅ Vite | ✅ Fast Refresh |
-| **Page generation** | ✅ `make new-page` | ✅ File-based routing | ✅ File-based routing |
-| **Component generation** | ✅ `make new-component` | ✅ Vue components | ✅ React components |
-| **Type safety** | ✅ Go + Templ | ✅ TypeScript | ✅ TypeScript |
-| **CSS framework** | ✅ Tailwind + DaisyUI | ✅ Any | ✅ Any |
-| **Production build** | ✅ Single binary | ❌ Node required | ❌ Node required |
-| **Memory usage** | ✅ ~10-20MB | ⚠️ ~50-100MB | ⚠️ ~50-100MB |
-| **Cold start time** | ✅ <100ms | ⚠️ ~500ms | ⚠️ ~500ms |
-| **Docker image size** | ✅ ~20MB (scratch) | ⚠️ ~200MB+ | ⚠️ ~200MB+ |
+| | go-htmx | Next.js / Nuxt |
+|---|---|---|
+| Rendering | Server-rendered HTML; htmx swaps HTML fragments | SSR/SSG plus client-side hydration |
+| Client JavaScript | htmx 2.0.10 + a small `app.js` (~18 KB gzipped together) | Framework runtime plus your components |
+| Routing | Explicit `net/http` routes; `make new-page` adds them | File-based |
+| Type safety | Go + templ, checked at compile time | TypeScript |
+| Dev reload | templ watcher (browser reload, server restart) + Tailwind watch | Vite / Fast Refresh with state preservation |
+| Production artifact | One ~8 MB static binary with assets embedded | Build output + `node_modules`, Node.js runtime |
+| Container | ~19 MB distroless image | Typically a Node base image, much larger |
+| Ecosystem | Go modules; any CSS/JS you vendor into `static/` | npm, component libraries |
 
-### vs Traditional Go Web Development
+**Choose go-htmx** for content sites, dashboards, admin panels and internal tools where most state lives
+on the server, and where a small, dependency-light deployment matters.
 
-| Aspect | go-htmx Template | Traditional Go |
-|--------|------------------|----------------|
-| **Project setup** | 1 command | Hours of configuration |
-| **Templating** | Type-safe Templ | html/template (runtime errors) |
-| **Hot reload** | ✅ Built-in | ❌ Manual setup |
-| **Frontend tooling** | ✅ Integrated | ❌ Separate setup |
-| **Generators** | ✅ Page & component | ❌ Manual creation |
-| **Middleware** | ✅ Pre-configured | ❌ Research & implement |
-| **Security headers** | ✅ Included | ❌ Must add |
-| **Rate limiting** | ✅ Included | ❌ Must add |
-| **CORS** | ✅ Configured | ❌ Must configure |
+**Choose Next.js or Nuxt** for apps with heavy client-side state or rich offline/interactive UI, or when
+your team and component library are already JavaScript-first.
 
-## Why Choose go-htmx?
+## vs. starting from scratch with Go
 
-### ✅ Choose go-htmx if:
-- You want fast, simple server-side rendered apps
-- You prefer Go's simplicity over JavaScript frameworks
-- You need excellent performance and low resource usage
-- You want true single-binary deployment
-- You like HTMX's approach to interactivity
-- You want modern DX without JavaScript build tools
+| | go-htmx | Plain `net/http` + `html/template` |
+|---|---|---|
+| Templates | templ: typed parameters, compile-time errors | Parsed at runtime, errors surface per request |
+| Full page vs. fragment | `RenderPage` / `Render` handle htmx and boosted requests, `Vary` headers | Write it yourself |
+| Static assets | Embedded, content-hashed URLs, immutable caching, ETags, precompressed gzip | `http.FileServer`, manual cache busting |
+| Middleware | Logging, recovery, CSP and security headers, CSRF, rate limiting, gzip | Write or pick each one |
+| Server | Timeouts, graceful shutdown, h2c, `/healthz`, `-healthcheck` | Write it yourself |
+| Tooling | `make dev`, generators, `make check`, CI, Dockerfile | Set up yourself |
 
-### ⚠️ Choose Nuxt/Next if:
-- You need a rich client-side app with lots of client state
-- Your team is primarily JavaScript developers
-- You need the vast npm ecosystem
-- You're building a complex SPA
+Everything here is plain Go with two direct dependencies (templ and godotenv), so you can read, change or
+delete any part of it.
 
-## Performance Comparison
+## Limitations
 
-### Resource Usage (Typical Small App)
-
-```
-go-htmx:
-  Memory: ~15MB
-  CPU: <1% idle
-  Docker: 20MB
-  Cold start: 50ms
-
-Nuxt/Next:
-  Memory: ~80MB
-  CPU: ~5% idle
-  Docker: 250MB+
-  Cold start: 500ms+
-```
-
-### Requests per Second (Simple Page)
-
-```
-go-htmx:    ~50,000 req/s
-Nuxt (SSR): ~2,000 req/s
-Next (SSR): ~2,500 req/s
-```
-
-*Benchmarks on identical hardware, simple page rendering*
-
-## Developer Experience
-
-### Setup Time
-
-```bash
-# go-htmx
-git clone https://github.com/tonymmm1/go-htmx.git
-cd go-htmx
-make setup
-make dev
-# → 2 minutes to running app
-
-# Nuxt
-npx nuxi init my-app
-cd my-app
-npm install
-npm run dev
-# → 2-3 minutes
-
-# Traditional Go
-# → 1-2 hours setting up templates, hot reload, middleware, etc.
-```
-
-### Creating a New Page
-
-```bash
-# go-htmx
-make new-page contact
-# Edit src/pages/pages.go to add route
-# → Done in 30 seconds
-
-# Nuxt
-# Create pages/contact.vue
-# → Done in 30 seconds (auto-routed)
-
-# Traditional Go
-# Create template file
-# Create handler
-# Add route
-# → 5-10 minutes
-```
-
-### Code Comparison
-
-#### Rendering a Page
-
-**go-htmx (Templ):**
-```go
-templ Contact() {
-    @Layout() {
-        <h1>Contact Us</h1>
-    }
-}
-
-func (h *Handler) HandleContact(w http.ResponseWriter, r *http.Request) {
-    Contact().Render(r.Context(), w)
-}
-```
-
-**Traditional Go (html/template):**
-```go
-tmpl := template.Must(template.ParseFiles("layout.html", "contact.html"))
-func handleContact(w http.ResponseWriter, r *http.Request) {
-    tmpl.Execute(w, nil) // Runtime errors!
-}
-```
-
-**Nuxt/Vue:**
-```vue
-<template>
-  <Layout>
-    <h1>Contact Us</h1>
-  </Layout>
-</template>
-
-<script setup>
-// Auto-routed
-</script>
-```
-
-## Deployment Comparison
-
-### go-htmx
-```bash
-make build
-scp bin/server production:/app/
-ssh production "/app/server"
-# → Single binary, no runtime dependencies
-```
-
-### Nuxt/Next
-```bash
-npm run build
-# Copy node_modules, .output or .next
-# Need Node.js on server
-# → Multiple files, needs runtime
-```
-
-## The Bottom Line
-
-**go-htmx** gives you:
-- Modern framework DX (like Nuxt/Next)
-- Go's performance and simplicity
-- Server-side rendering with HTMX interactivity
-- True single-binary deployment
-- Minimal resource usage
-
-It's the **best of both worlds**: modern JavaScript framework DX with Go's legendary simplicity and performance.
-
-Perfect for:
-- 🎯 Content sites
-- 🎯 Dashboards
-- 🎯 Admin panels
-- 🎯 Internal tools
-- 🎯 SaaS applications
-- 🎯 APIs with simple UIs
-
+- **Node.js is required at build time** for Tailwind and daisyUI, though not at runtime.
+- **No database, sessions, authentication or i18n.** Add the libraries you prefer.
+- **No file-based routing.** Routes live in `internal/pages/pages.go`; the page generator inserts them.
+- **The strict CSP rules out inline scripts and `hx-on:*`.** Client code goes in files under `static/js/`.
+- **The rate limiter is in memory and per process.** With several instances, rate-limit at the proxy or
+  use a shared store.

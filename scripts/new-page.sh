@@ -29,8 +29,10 @@ fi
 
 readonly PAGE_SLUG="$(printf '%s' "$PAGE_NAME" | tr '[:upper:]_' '[:lower:]-')"
 readonly PAGE_COMPONENT="$(printf '%s\n' "$PAGE_NAME" | awk -F '[-_]' '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2); print "" }')"
+# Human-readable title, e.g. contact-us -> "Contact Us".
+readonly PAGE_TITLE="$(printf '%s\n' "$PAGE_NAME" | awk -F '[-_]' '{ for (i = 1; i <= NF; i++) printf "%s%s%s", (i > 1 ? " " : ""), toupper(substr($i, 1, 1)), substr($i, 2); print "" }')"
 readonly TEMPLATE_FILE="templates/pages/${PAGE_SLUG}.templ"
-readonly HANDLERS_FILE="src/pages/pages.go"
+readonly HANDLERS_FILE="internal/pages/pages.go"
 readonly HANDLERS_TMP="${HANDLERS_FILE}.tmp"
 readonly TEMPLATE_TMP="${TEMPLATE_FILE}.tmp"
 
@@ -63,11 +65,15 @@ package pagetemplates
 import "$MODULE_PATH/templates/layouts"
 
 templ ${PAGE_COMPONENT}() {
-	@layouts.Layout() {
+	@layouts.Layout(layouts.Meta{
+		Title:       "${PAGE_TITLE}",
+		Description: "TODO: describe the ${PAGE_TITLE} page in one sentence.",
+		Path:        "/${PAGE_SLUG}",
+	}) {
 		<div class="container mx-auto px-4 py-8">
 			<div class="prose lg:prose-xl mx-auto">
-				<h1>${PAGE_COMPONENT}</h1>
-				<p>Welcome to the ${PAGE_COMPONENT} page.</p>
+				<h1>${PAGE_TITLE}</h1>
+				<p>Welcome to the ${PAGE_TITLE} page.</p>
 				<div class="mt-8">
 					<a href="/" class="btn btn-primary">Back to Home</a>
 				</div>
@@ -85,7 +91,7 @@ awk -v route="mux.HandleFunc(\"GET /${PAGE_SLUG}\", h.Handle${PAGE_COMPONENT})" 
 cat >> "$HANDLERS_TMP" <<EOF
 
 func (h *Handler) Handle${PAGE_COMPONENT}(w http.ResponseWriter, r *http.Request) {
-	render(w, r, pagetemplates.${PAGE_COMPONENT}())
+	RenderPage(w, r, http.StatusOK, pagetemplates.${PAGE_COMPONENT}())
 }
 EOF
 
@@ -96,4 +102,4 @@ trap - EXIT
 
 echo "Created $TEMPLATE_FILE"
 echo "Added /${PAGE_SLUG} and Handle${PAGE_COMPONENT} to $HANDLERS_FILE"
-echo "Run 'templ generate' (or leave 'make dev' running) to generate the Go template."
+echo "Run 'make generate' (or leave 'make dev' running) to generate the Go template."

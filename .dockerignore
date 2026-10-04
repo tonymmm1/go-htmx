@@ -5,14 +5,16 @@
 
 # Documentation
 *.md
-COMPARISON.md
-QUICKSTART.md
 LICENSE
 
-# CI/CD
+# CI/CD and container config
 .github
+Dockerfile
+.dockerignore
+docker-compose*.yml
 
-# IDE
+# IDE / agent state
+.claude
 .vscode
 .idea
 *.swp
@@ -29,12 +31,13 @@ tmp
 *.log
 
 # Generated files (will be generated in container)
-static/css
+static/css/*
+!static/css/.gitkeep
 *_templ.go
 
 # Environment
 .env
-.env.local
+.env.*
 
 # OS
 .DS_Store

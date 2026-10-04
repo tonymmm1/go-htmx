@@ -1,36 +1,95 @@
 package layouts
 
-templ Layout() {
-	<!DOCTYPE html>
-	<html lang="en" data-theme="light">
-		<head>
-			<meta charset="UTF-8"/>
-			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-			<title>Go-HTMX App</title>
-			<link rel="stylesheet" href="/static/css/styles.css"/>
-			<script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" crossorigin="anonymous"></script>
-		</head>
-		<body>
-			<div class="navbar bg-base-100 shadow-lg">
-				<div class="flex-1">
-					<a class="btn btn-ghost text-xl" href="/">Go-HTMX</a>
-				</div>
-				<div class="flex-none">
-					<ul class="menu menu-horizontal px-1">
-						<li><a href="/">Home</a></li>
-						<li><a href="/examples">Examples</a></li>
-						<li><a href="/about">About</a></li>
-					</ul>
-				</div>
-			</div>
-			<main>
-				{ children... }
-			</main>
-			<footer class="footer footer-center p-10 bg-base-200 text-base-content rounded mt-8">
-				<div>
+import "github.com/tonymmm1/go-htmx/static"
+
+// htmxConfig is read by htmx from <meta name="htmx-config">.
+//   - includeIndicatorStyles: .htmx-indicator styles live in styles/input.css
+//     (htmx would otherwise inject an inline <style>, which the CSP blocks).
+//   - allowEval, allowScriptTags: keep htmx compatible with script-src 'self';
+//     hx-on:*, hx-vals="js:...", and hx-trigger filters like [ctrlKey] are off.
+//   - historyRestoreAsHxRequest: history cache misses must get the full page,
+//     not the content-only response pages.RenderPage sends to htmx requests.
+const htmxConfig = `{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"historyRestoreAsHxRequest":false}`
+
+// Layout wraps a page in the document shell. When the context comes from
+// WithContentOnly, it renders just the page content.
+//
+// <main> is a flex column that fills the viewport; give a page's outer element
+// flex-1 to stretch its background down to the footer.
+//
+// app.js is loaded without defer on purpose: it applies the visitor's saved
+// theme before first paint. It is tiny, cached, and fetched in parallel with
+// the stylesheet, which blocks rendering anyway. Everything else in it waits
+// for events, so it does not touch the DOM while the page is parsing.
+templ Layout(meta Meta) {
+	if contentOnly(ctx) {
+		{ children... }
+	} else {
+		<!DOCTYPE html>
+		<html lang="en">
+			<head>
+				<meta charset="UTF-8"/>
+				<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+				<title>{ meta.FullTitle() }</title>
+				if meta.Description != "" {
+					<meta name="description" content={ meta.Description }/>
+				}
+				<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)"/>
+				<meta name="theme-color" content="#1d232a" media="(prefers-color-scheme: dark)"/>
+				<meta name="htmx-config" content={ htmxConfig }/>
+				<link rel="icon" href={ static.Path("img/favicon.svg") } type="image/svg+xml"/>
+				<link rel="stylesheet" href={ static.Path("css/styles.css") }/>
+				<script src={ static.Path("js/app.js") }></script>
+				<script src={ static.Path("js/htmx.min.js") } defer></script>
+			</head>
+			<body class="flex min-h-screen flex-col" hx-boost="true" hx-indicator="#page-progress">
+				<div id="page-progress" class="page-progress htmx-indicator" aria-hidden="true"></div>
+				<header class="navbar bg-base-100 shadow-lg">
+					<div class="flex-1">
+						<a class="btn btn-ghost text-xl" href="/">{ SiteName }</a>
+					</div>
+					<nav class="flex flex-none items-center" aria-label="Main">
+						<ul class="menu menu-horizontal px-1">
+							@navLink(meta.Path, "/", "Home")
+							@navLink(meta.Path, "/examples", "Examples")
+							@navLink(meta.Path, "/about", "About")
+						</ul>
+						@themeToggle()
+					</nav>
+				</header>
+				<main id="main" class="flex flex-1 flex-col">
+					{ children... }
+				</main>
+				<footer class="footer footer-center border-t border-base-300 bg-base-200 p-10 text-base-content">
 					<p>Built with Go, HTMX, Templ, and Tailwind CSS</p>
-				</div>
-			</footer>
-		</body>
-	</html>
+				</footer>
+				<div id="toasts" class="toast toast-end z-50"></div>
+			</body>
+		</html>
+	}
+}
+
+templ navLink(current, href, label string) {
+	<li>
+		<a
+			href={ templ.URL(href) }
+			if current == href {
+				class="menu-active"
+				aria-current="page"
+			}
+		>{ label }</a>
+	</li>
+}
+
+// themeToggle flips between light and dark; static/js/app.js handles the click.
+templ themeToggle() {
+	<button type="button" class="btn btn-ghost btn-circle theme-toggle" data-theme-toggle aria-label="Toggle dark mode" title="Toggle dark mode">
+		<svg class="theme-icon-moon size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+		</svg>
+		<svg class="theme-icon-sun size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<circle cx="12" cy="12" r="4"></circle>
+			<path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+		</svg>
+	</button>
 }

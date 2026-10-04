@@ -6,8 +6,12 @@ import (
 )
 
 templ Examples() {
-	@layouts.Layout() {
-		<div class="min-h-screen bg-base-200 px-4 py-12">
+	@layouts.Layout(layouts.Meta{
+		Title:       "HTMX Examples",
+		Description: "Working HTMX examples served by Go: fragment requests, a server-side counter, and debounced live search.",
+		Path:        "/examples",
+	}) {
+		<div class="flex-1 bg-base-200 px-4 py-12">
 			<div class="mx-auto max-w-5xl">
 				<div class="mb-10 max-w-3xl">
 					<div class="badge badge-primary badge-outline mb-4">Working examples</div>
@@ -26,7 +30,7 @@ templ Examples() {
 								</div>
 								<div class="badge badge-neutral">hx-get</div>
 							</div>
-							<div id="server-time" class="my-4 rounded-box bg-base-200 p-5">
+							<div id="server-time" class="my-4 rounded-box bg-base-200 p-5" aria-live="polite">
 								<p class="text-base-content/60">Ask the server for its current time.</p>
 							</div>
 							<div class="card-actions items-center">
@@ -85,12 +89,14 @@ templ Examples() {
 								/>
 								<span id="search-loading" class="loading loading-spinner loading-sm htmx-indicator" aria-label="Loading"></span>
 							</label>
-							@components.SearchResults("", nil)
+							<div aria-live="polite">
+								@components.SearchResults("", nil)
+							</div>
 						</div>
 					</section>
 				</div>
 				<div class="mt-8 text-center text-sm text-base-content/60">
-					Start with <code>templates/pages/examples.templ</code> and <code>src/pages/pages.go</code>, then replace these demos with your app.
+					Start with <code>templates/pages/examples.templ</code> and <code>internal/pages/pages.go</code>, then replace these demos with your app.
 				</div>
 			</div>
 		</div>
