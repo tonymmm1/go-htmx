@@ -29,7 +29,8 @@ tmp
 *.log
 
 # Generated files (will be generated in container)
-static/css
+static/css/*
+!static/css/.gitkeep
 *_templ.go
 
 # Environment

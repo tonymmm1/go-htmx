@@ -23,7 +23,8 @@ node_modules/
 vendor/
 
 # Build artifacts
-static/css/
+static/css/*
+!static/css/.gitkeep
 *_templ.go
 
 # IDE
