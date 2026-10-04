@@ -18,7 +18,7 @@ setup:
 tools:
 	@echo "Installing Go tools..."
 	@go install github.com/air-verse/air@$(AIR_VERSION)
-	@go install github.com/a-h/templ/cmd/templ@$(TEMPL_VERSION)
+	
 	@echo "Tools installed successfully"
 
 # Install dependencies
@@ -32,9 +32,9 @@ deps:
 dev: tools deps
 	@echo "Starting development server..."
 	@mkdir -p static/css
-	@templ generate
+	@go tool templ generate
 	@npx concurrently \
-		"templ generate --watch --proxy='http://localhost:$(PORT)' --open-browser=false" \
+		"go tool templ generate --watch --proxy='http://localhost:$(PORT)' --open-browser=false" \
 		"npm run dev:css" \
 		"air" \
 		--names "templ,css,go" \
@@ -46,8 +46,8 @@ build: deps
 	@echo "Building for production..."
 	@mkdir -p bin static/css
 	@npm run build:css
-	@templ generate
-	@go build -ldflags="-s -w" -o bin/server ./src/cmd/main.go
+	@go tool templ generate
+	@go build -ldflags="-s -w" -o bin/server ./cmd/server
 	@echo "Build complete: ./bin/server"
 
 # Run the built binary
@@ -85,7 +85,7 @@ compose-down:
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf bin/ static/css/ tmp/ node_modules/.cache
-	@find src -type f -name "*_templ.go" -delete
+	@find templates -type f -name "*_templ.go" -delete
 	@echo "Clean complete"
 
 # Deep clean (including dependencies)

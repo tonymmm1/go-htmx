@@ -20,7 +20,7 @@ trap cleanup EXIT
 
 mkdir -p "$TEST_ROOT"
 cp "$PROJECT_ROOT/go.mod" "$PROJECT_ROOT/go.sum" "$TEST_ROOT/"
-cp -R "$PROJECT_ROOT/src" "$PROJECT_ROOT/templates" "$PROJECT_ROOT/scripts" "$TEST_ROOT/"
+cp -R "$PROJECT_ROOT/cmd" "$PROJECT_ROOT/internal" "$PROJECT_ROOT/static" "$PROJECT_ROOT/templates" "$PROJECT_ROOT/scripts" "$TEST_ROOT/"
 
 replace_module() {
     local file="$1"
@@ -32,22 +32,18 @@ replace_module() {
 replace_module "$TEST_ROOT/go.mod"
 while IFS= read -r -d '' file; do
     replace_module "$file"
-done < <(find "$TEST_ROOT/src" "$TEST_ROOT/templates" -type f \( -name '*.go' -o -name '*.templ' \) -print0)
+done < <(find "$TEST_ROOT/cmd" "$TEST_ROOT/internal" "$TEST_ROOT/static" "$TEST_ROOT/templates" -type f \( -name '*.go' -o -name '*.templ' \) -print0)
 
 cd "$TEST_ROOT"
 bash scripts/new-page.sh contact-us
 bash scripts/new-component.sh feature-card
 
 grep -Fq 'example.com/scaffold/site/templates/layouts' templates/pages/contact-us.templ
-grep -Fq 'mux.HandleFunc("GET /contact-us", h.HandleContactUs)' src/pages/pages.go
-grep -Fq 'func (h *Handler) HandleContactUs' src/pages/pages.go
+grep -Fq 'mux.HandleFunc("GET /contact-us", h.HandleContactUs)' internal/pages/pages.go
+grep -Fq 'func (h *Handler) HandleContactUs' internal/pages/pages.go
 grep -Fq 'templ FeatureCard(title string)' templates/components/feature-card.templ
 
-if command -v templ >/dev/null 2>&1; then
-    templ generate
-else
-    go run github.com/a-h/templ/cmd/templ@v0.3.1020 generate
-fi
+go tool templ generate
 go test ./...
 
 echo "Generator smoke test passed with module $TEST_MODULE"

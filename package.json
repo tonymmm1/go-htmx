@@ -5,8 +5,8 @@
     "scripts": {
         "dev": "make dev",
         "build": "make build",
-        "dev:css": "tailwindcss -i ./src/styles/input.css -o ./static/css/styles.css --watch",
-        "build:css": "tailwindcss -i ./src/styles/input.css -o ./static/css/styles.css --minify"
+        "dev:css": "tailwindcss -i ./styles/input.css -o ./static/css/styles.css --watch",
+        "build:css": "tailwindcss -i ./styles/input.css -o ./static/css/styles.css --minify"
     },
     "devDependencies": {
         "@tailwindcss/cli": "^4.3.3",

@@ -5,9 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/tonymmm1/go-htmx/src/config"
-	"github.com/tonymmm1/go-htmx/src/middleware"
-	"github.com/tonymmm1/go-htmx/src/pages"
+	"github.com/tonymmm1/go-htmx/internal/config"
+	"github.com/tonymmm1/go-htmx/internal/middleware"
+	"github.com/tonymmm1/go-htmx/internal/pages"
+	"github.com/tonymmm1/go-htmx/static"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
@@ -32,8 +33,8 @@ func (s *Server) Run() error {
 	mux := http.NewServeMux()
 
 	// Static files
-	fileServer := http.FileServer(http.Dir("./static"))
-	mux.Handle("GET /static/", http.StripPrefix("/static/", fileServer))
+	static.Configure(s.config.IsDev(), "static")
+	mux.Handle("GET /static/", static.Handler())
 
 	// HTTP routes
 	pages.RegisterPageRoutes(pagesHandler, mux)

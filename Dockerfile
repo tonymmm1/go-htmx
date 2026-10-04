@@ -16,7 +16,7 @@ FROM toolchain AS development
 FROM toolchain AS builder
 
 ARG TEMPL_VERSION
-RUN go install github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}
+
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -27,11 +27,11 @@ RUN npm ci
 COPY . .
 
 RUN npm run build:css
-RUN templ generate
+RUN go tool templ generate
 RUN CGO_ENABLED=0 go build \
     -ldflags="-s -w" \
     -o server \
-    ./src/cmd/main.go
+    ./cmd/server
 
 FROM debian:bookworm-slim
 

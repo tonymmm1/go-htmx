@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/tonymmm1/go-htmx/src/config"
+	"github.com/tonymmm1/go-htmx/internal/config"
 	"github.com/tonymmm1/go-htmx/templates/components"
 	pagetemplates "github.com/tonymmm1/go-htmx/templates/pages"
 )

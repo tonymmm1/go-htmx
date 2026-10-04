@@ -86,7 +86,7 @@ if [ "$CURRENT_MODULE" != "$TEMPLATE_MODULE" ]; then
 
     while IFS= read -r -d '' file; do
         replace_module_path "$file"
-    done < <(find src -type f -name "*.go" -print0)
+    done < <(find cmd internal -type f -name "*.go" -print0)
 
     while IFS= read -r -d '' file; do
         replace_module_path "$file"

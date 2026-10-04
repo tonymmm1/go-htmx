@@ -43,7 +43,7 @@ jobs:
         run: go mod verify
 
       - name: Generate Templ files
-        run: go run github.com/a-h/templ/cmd/templ@v0.3.1020 generate
+        run: go tool templ generate
 
       - name: Build CSS
         run: npm run build:css
@@ -58,7 +58,7 @@ jobs:
         run: bash scripts/test-generators.sh
 
       - name: Build application
-        run: go build -trimpath -o bin/server ./src/cmd/main.go
+        run: go build -trimpath -o bin/server ./cmd/server
 
       - name: Audit npm dependencies
         run: npm audit --audit-level=moderate

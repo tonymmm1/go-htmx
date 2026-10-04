@@ -30,7 +30,7 @@ fi
 readonly PAGE_SLUG="$(printf '%s' "$PAGE_NAME" | tr '[:upper:]_' '[:lower:]-')"
 readonly PAGE_COMPONENT="$(printf '%s\n' "$PAGE_NAME" | awk -F '[-_]' '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2); print "" }')"
 readonly TEMPLATE_FILE="templates/pages/${PAGE_SLUG}.templ"
-readonly HANDLERS_FILE="src/pages/pages.go"
+readonly HANDLERS_FILE="internal/pages/pages.go"
 readonly HANDLERS_TMP="${HANDLERS_FILE}.tmp"
 readonly TEMPLATE_TMP="${TEMPLATE_FILE}.tmp"
 
