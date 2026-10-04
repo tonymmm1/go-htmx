@@ -41,9 +41,38 @@ bash scripts/new-component.sh feature-card
 grep -Fq 'example.com/scaffold/site/templates/layouts' templates/pages/contact-us.templ
 grep -Fq 'mux.HandleFunc("GET /contact-us", h.HandleContactUs)' internal/pages/pages.go
 grep -Fq 'func (h *Handler) HandleContactUs' internal/pages/pages.go
+grep -Fq 'RenderPage(w, r, http.StatusOK, pagetemplates.ContactUs())' internal/pages/pages.go
+grep -Fq '@layouts.Layout(layouts.Meta{' templates/pages/contact-us.templ
+grep -Fq 'Title:       "Contact Us",' templates/pages/contact-us.templ
+grep -Fq 'Path:        "/contact-us",' templates/pages/contact-us.templ
 grep -Fq 'templ FeatureCard(title string)' templates/components/feature-card.templ
 
+# The generated route must be served by the new handler, not the 404 catch-all.
+cat > internal/pages/generated_page_test.go <<'EOF'
+package pages
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+)
+
+func TestGeneratedPage(t *testing.T) {
+	recorder := performRequest(http.MethodGet, "/contact-us", "")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET /contact-us returned %d, want %d", recorder.Code, http.StatusOK)
+	}
+	body := recorder.Body.String()
+	for _, expected := range []string{"<title>Contact Us · Go-HTMX</title>", "Welcome to the Contact Us page."} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("GET /contact-us does not contain %q", expected)
+		}
+	}
+}
+EOF
+
 go tool templ generate
+go vet ./...
 go test ./...
 
 echo "Generator smoke test passed with module $TEST_MODULE"

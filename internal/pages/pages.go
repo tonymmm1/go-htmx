@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/a-h/templ"
 	"github.com/tonymmm1/go-htmx/internal/config"
 	"github.com/tonymmm1/go-htmx/templates/components"
 	pagetemplates "github.com/tonymmm1/go-htmx/templates/pages"
@@ -33,25 +32,34 @@ func RegisterPageRoutes(h *Handler, mux *http.ServeMux) {
 	mux.HandleFunc("GET /examples/search", h.HandleExampleSearch)
 	mux.HandleFunc("POST /examples/counter", h.HandleExampleCounter)
 	// scaffold:routes -- new-page.sh inserts generated routes above this line.
+
+	// Catch-all for unknown paths. It is "GET /" rather than "/" so a known
+	// path with the wrong method still gets 405 Method Not Allowed.
+	mux.HandleFunc("GET /", h.HandleNotFound)
 }
 
 func (h *Handler) HandleIndex(w http.ResponseWriter, r *http.Request) {
-	render(w, r, pagetemplates.Index())
+	RenderPage(w, r, http.StatusOK, pagetemplates.Index())
 }
 
 func (h *Handler) HandleAbout(w http.ResponseWriter, r *http.Request) {
-	render(w, r, pagetemplates.About())
+	RenderPage(w, r, http.StatusOK, pagetemplates.About())
 }
 
 func (h *Handler) HandleExamples(w http.ResponseWriter, r *http.Request) {
-	render(w, r, pagetemplates.Examples())
+	RenderPage(w, r, http.StatusOK, pagetemplates.Examples())
+}
+
+// HandleNotFound renders the 404 page for any path without a route.
+func (h *Handler) HandleNotFound(w http.ResponseWriter, r *http.Request) {
+	RenderPage(w, r, http.StatusNotFound, pagetemplates.NotFound(r.URL.Path))
 }
 
 // HandleExampleTime returns only the fragment HTMX swaps into the page.
 func (h *Handler) HandleExampleTime(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	now := time.Now().Format("Mon, 02 Jan 2006 15:04:05 MST")
-	render(w, r, components.ServerTime(now))
+	Render(w, r, http.StatusOK, components.ServerTime(now))
 }
 
 // HandleExampleSearch demonstrates a debounced GET that returns a result fragment.
@@ -64,7 +72,7 @@ func (h *Handler) HandleExampleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	render(w, r, components.SearchResults(query, results))
+	Render(w, r, http.StatusOK, components.SearchResults(query, results))
 }
 
 // HandleExampleCounter demonstrates a POST that replaces a complete component.
@@ -101,12 +109,5 @@ func (h *Handler) HandleExampleCounter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	render(w, r, components.Counter(count))
-}
-
-func render(w http.ResponseWriter, r *http.Request, component templ.Component) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := component.Render(r.Context(), w); err != nil {
-		http.Error(w, "failed to render response", http.StatusInternalServerError)
-	}
+	Render(w, r, http.StatusOK, components.Counter(count))
 }
