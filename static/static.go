@@ -55,7 +55,7 @@ import (
 // all: prefix lets it match) so the package compiles before CSS is built.
 // Add new asset directories (img, fonts, ...) to this directive.
 //
-//go:embed all:css js
+//go:embed all:css img js
 var embedded embed.FS
 
 const (

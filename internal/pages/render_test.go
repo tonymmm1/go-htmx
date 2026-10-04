@@ -87,6 +87,8 @@ func TestPagesRenderContentOnlyForHTMXRequests(t *testing.T) {
 	})
 }
 
+var staticURL = regexp.MustCompile(`(?:src|href)="(/static/[^"]*)"`)
+
 func TestLayoutHead(t *testing.T) {
 	recorder := performRequest(http.MethodGet, "/about", "")
 	body := recorder.Body.String()
@@ -96,15 +98,22 @@ func TestLayoutHead(t *testing.T) {
 		"<title>About · Go-HTMX</title>",
 		`<meta name="description" content="What is included in the Go-HTMX starter template.">`,
 		`<meta name="htmx-config" content="{&#34;includeIndicatorStyles&#34;:false`,
-		`<script src="/static/js/app.js"></script>`,
-		`<script src="/static/js/htmx.min.js" defer></script>`,
-		`<link rel="icon" href="/static/favicon.svg"`,
+		`<script src="/static/js/app.js?v=`,
+		`<script src="/static/js/htmx.min.js?v=`,
+		`<link rel="icon" href="/static/img/favicon.svg?v=`,
 		`hx-boost="true"`,
 		`<a href="/about" class="menu-active" aria-current="page">About</a>`,
 		`<div id="toasts"`,
 	} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("GET /about does not contain %q", expected)
+		}
+	}
+	// Assets missing from the //go:embed directive would 404 in production;
+	// static.Path signals that by omitting the content hash.
+	for _, match := range staticURL.FindAllStringSubmatch(body, -1) {
+		if !strings.Contains(match[1], "?v=") {
+			t.Errorf("asset %s is not embedded (no ?v= hash)", match[1])
 		}
 	}
 	if strings.Contains(body, "data-theme=") {
