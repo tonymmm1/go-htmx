@@ -1,173 +1,132 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Setup script for go-htmx template
-# Makes setup as easy as create-nuxt-app
+# Setup script for the go-htmx template.
+#
+# Usage: bash setup.sh [module-path]
+#
+# Safe to re-run. It:
+#   1. checks prerequisites (Go 1.27+, Node.js 22+, npm, make),
+#   2. optionally sets the module path in go.mod, then rewrites any remaining
+#      template import paths in .go/.templ files (also fixes up projects created
+#      with `gonew`, which only rewrites .go files),
+#   3. creates .env from .env.example,
+#   4. installs dependencies, generates templ code, builds CSS and compiles.
 
-set -e
+set -euo pipefail
 
-# Colors for output
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
-AIR_VERSION="v1.67.4"
-TEMPL_VERSION="v0.3.1020"
+NC='\033[0m'
 
-# Banner
+readonly TEMPLATE_MODULE="github.com/tonymmm1/go-htmx"
+readonly NEW_MODULE="${1:-}"
+
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+
+step() { echo -e "\n${BLUE}$*${NC}"; }
+ok() { echo -e "${GREEN}✓ $*${NC}"; }
+fail() { echo -e "${RED}✗ $*${NC}" >&2; exit 1; }
+
 echo -e "${BLUE}"
 cat << "EOF"
    ____          _   _ _____ __  ____  __
   / ___| ___    | | | |_   _|  \/  \ \/ /
- | |  _ / _ \   | |_| | | | | |\/| |\  / 
- | |_| | (_) |  |  _  | | | | |  | |/  \ 
+ | |  _ / _ \   | |_| | | | | |\/| |\  /
+ | |_| | (_) |  |  _  | | | | |  | |/  \
   \____|\___/___|_| |_| |_| |_|  |_/_/\_\
-           |_____|                        
+           |_____|
 
 Go + HTMX + Templ + Tailwind CSS Starter
 EOF
 echo -e "${NC}"
 
-# Check prerequisites
-echo -e "${BLUE}Checking prerequisites...${NC}"
+# --- Prerequisites ----------------------------------------------------------
+step "Checking prerequisites..."
 
-if ! command -v go &> /dev/null; then
-    echo -e "${RED}✗ Go is not installed. Please install Go 1.27 or later.${NC}"
-    exit 1
-fi
+command -v go &> /dev/null || fail "Go is not installed. Please install Go 1.27 or later."
 GO_VERSION=$(go env GOVERSION)
 if [[ ! "$GO_VERSION" =~ ^go([0-9]+)\.([0-9]+) ]] ||
     (( BASH_REMATCH[1] < 1 || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] < 27) )); then
-    echo -e "${RED}✗ Go 1.27 or later is required (found ${GO_VERSION}).${NC}"
-    exit 1
+    fail "Go 1.27 or later is required (found ${GO_VERSION})."
 fi
-echo -e "${GREEN}✓ Go ${GO_VERSION}${NC}"
+ok "Go ${GO_VERSION}"
 
-if ! command -v node &> /dev/null; then
-    echo -e "${RED}✗ Node.js is not installed. Please install Node.js 22 or later.${NC}"
-    exit 1
-fi
+command -v node &> /dev/null || fail "Node.js is not installed. Please install Node.js 22 or later."
 NODE_VERSION=$(node --version)
 if [[ ! "$NODE_VERSION" =~ ^v([0-9]+)\. ]] || (( BASH_REMATCH[1] < 22 )); then
-    echo -e "${RED}✗ Node.js 22 or later is required (found ${NODE_VERSION}).${NC}"
-    exit 1
+    fail "Node.js 22 or later is required (found ${NODE_VERSION})."
 fi
-echo -e "${GREEN}✓ Node.js ${NODE_VERSION}${NC}"
+ok "Node.js ${NODE_VERSION}"
 
-if ! command -v npm &> /dev/null; then
-    echo -e "${RED}✗ npm is not installed.${NC}"
-    exit 1
+command -v npm &> /dev/null || fail "npm is not installed."
+ok "npm $(npm --version)"
+
+command -v make &> /dev/null || fail "make is not installed."
+ok "make"
+
+# --- Module path ------------------------------------------------------------
+step "Checking module path..."
+
+if [[ -n "$NEW_MODULE" ]]; then
+    [[ "$NEW_MODULE" =~ ^[A-Za-z0-9._~-]+(/[A-Za-z0-9._~-]+)*$ ]] || fail "Invalid module path: $NEW_MODULE"
+    go mod edit -module "$NEW_MODULE"
 fi
-echo -e "${GREEN}✓ npm $(npm --version)${NC}"
 
-if ! command -v make &> /dev/null; then
-    echo -e "${RED}✗ make is not installed.${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✓ make${NC}"
+CURRENT_MODULE=$(awk '$1 == "module" { gsub(/"/, "", $2); print $2; exit }' go.mod)
 
-echo ""
-
-# Fix module paths
-echo -e "${BLUE}Checking module paths...${NC}"
-CURRENT_MODULE=$(grep '^module ' go.mod | awk '{print $2}')
-TEMPLATE_MODULE="github.com/tonymmm1/go-htmx"
-
-if [ "$CURRENT_MODULE" != "$TEMPLATE_MODULE" ]; then
-    echo -e "${YELLOW}Current module: $CURRENT_MODULE${NC}"
-    echo -e "${YELLOW}Updating import paths from $TEMPLATE_MODULE...${NC}"
-    
-    replace_module_path() {
-        local file="$1"
-        local temporary="${file}.module-update"
-        sed "s|$TEMPLATE_MODULE|$CURRENT_MODULE|g" "$file" > "$temporary"
-        mv "$temporary" "$file"
-    }
-
+if [[ "$CURRENT_MODULE" != "$TEMPLATE_MODULE" ]]; then
+    # Match the template path only as a whole path element, so re-running is a
+    # no-op even when the new path starts with the template path.
+    old_pattern="${TEMPLATE_MODULE//./\\.}\\([/\"]\\)"
+    updated=0
     while IFS= read -r -d '' file; do
-        replace_module_path "$file"
-    done < <(find cmd internal -type f -name "*.go" -print0)
-
-    while IFS= read -r -d '' file; do
-        replace_module_path "$file"
-    done < <(find templates -type f -name "*.templ" -print0)
-    
-    echo -e "${GREEN}✓ Import paths updated to $CURRENT_MODULE${NC}"
+        if grep -q "${TEMPLATE_MODULE}[/\"]" "$file"; then
+            sed "s#${old_pattern}#${CURRENT_MODULE}\\1#g" "$file" > "$file.module-update"
+            mv -- "$file.module-update" "$file"
+            updated=$((updated + 1))
+        fi
+    done < <(find cmd internal static templates scripts -type f \
+        \( -name '*.go' -o -name '*.templ' -o -name '*.sh' \) ! -name '*_templ.go' -print0)
+    ok "Module is $CURRENT_MODULE (updated $updated file(s))"
 else
-    echo -e "${GREEN}✓ Module paths are correct${NC}"
+    ok "Module is $CURRENT_MODULE"
 fi
 
-echo ""
-
-# Create .env if it doesn't exist
-if [ ! -f .env ]; then
-    echo -e "${BLUE}Creating .env file...${NC}"
-    echo "PORT=8080" > .env
-    echo -e "${GREEN}✓ .env file created${NC}"
+# --- Environment ------------------------------------------------------------
+step "Checking .env..."
+if [[ -f .env ]]; then
+    echo -e "${YELLOW}⚠ .env already exists, leaving it alone${NC}"
 else
-    echo -e "${YELLOW}⚠ .env file already exists, skipping${NC}"
+    cp .env.example .env
+    ok ".env created from .env.example"
 fi
 
-# Install Go tools FIRST (needed for templ generate)
-echo ""
-echo -e "${BLUE}Installing Go tools (air, templ)...${NC}"
-go install github.com/air-verse/air@"${AIR_VERSION}"
-go install github.com/a-h/templ/cmd/templ@"${TEMPL_VERSION}"
-echo -e "${GREEN}✓ Go tools installed${NC}"
+# --- Dependencies, code generation, CSS ------------------------------------
+step "Installing dependencies..."
+make --no-print-directory deps
+ok "Go modules and npm packages installed"
 
-# Generate templ files BEFORE go mod tidy
-echo ""
-echo -e "${BLUE}Generating Templ files...${NC}"
-templ generate
-echo -e "${GREEN}✓ Templ files generated${NC}"
+step "Generating templ code and CSS..."
+make --no-print-directory generate css
+ok "Templ code and CSS generated"
 
-# NOW run go mod tidy (after templ files exist)
-if [ "$CURRENT_MODULE" != "$TEMPLATE_MODULE" ]; then
-    echo ""
-    echo -e "${BLUE}Running go mod tidy...${NC}"
-    go mod tidy
-    echo -e "${GREEN}✓ Dependencies updated${NC}"
-fi
+step "Compiling..."
+go build ./...
+ok "Project compiles"
 
-# Install Go dependencies
-echo ""
-echo -e "${BLUE}Installing Go dependencies...${NC}"
-go mod download
-echo -e "${GREEN}✓ Go dependencies installed${NC}"
-
-# Install npm dependencies
-echo ""
-echo -e "${BLUE}Installing npm dependencies...${NC}"
-npm install
-echo -e "${GREEN}✓ npm dependencies installed${NC}"
-
-# Create necessary directories
-echo ""
-echo -e "${BLUE}Creating necessary directories...${NC}"
-mkdir -p static/css static/images/icons static/images/logos tmp
-echo -e "${GREEN}✓ Directories created${NC}"
-
-# Build initial CSS
-echo ""
-echo -e "${BLUE}Building initial CSS...${NC}"
-npm run build:css
-echo -e "${GREEN}✓ CSS built${NC}"
-
-# Success message
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}✓ Setup complete! Your project is ready.${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${BLUE}To start the development server:${NC}"
-echo -e "  ${YELLOW}make dev${NC}"
+echo -e "${BLUE}Start the development server (hot reload):${NC}"
+echo -e "  ${YELLOW}make dev${NC}   then open ${GREEN}http://localhost:7331${NC}"
 echo ""
 echo -e "${BLUE}Other useful commands:${NC}"
 echo -e "  ${YELLOW}make build${NC}       - Build for production"
-echo -e "  ${YELLOW}make run${NC}         - Build and run"
+echo -e "  ${YELLOW}make check${NC}       - Format check, lint, tests (what CI runs)"
 echo -e "  ${YELLOW}make docker-up${NC}   - Run in Docker"
 echo -e "  ${YELLOW}make help${NC}        - Show all commands"
-echo ""
-echo -e "${BLUE}Your app will be available at:${NC}"
-echo -e "  ${GREEN}http://localhost:8080${NC}"
 echo ""
