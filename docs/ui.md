@@ -5,7 +5,9 @@ here, and how to switch to a shadcn/ui-style kit if you prefer that look.
 
 ## daisyUI (default)
 
-Configured in `styles/input.css`; there is no `tailwind.config.js` in Tailwind 4:
+Configured in `styles/input.css`; there is no `tailwind.config.js` in Tailwind 4. There's no npm either:
+the Tailwind standalone CLI and daisyUI's `daisyui.mjs` bundle are downloaded into `.tools/` by
+`scripts/install-tools.sh`, which pins their versions and checksums:
 
 ```css
 @import "tailwindcss" source(none);
@@ -14,7 +16,7 @@ Configured in `styles/input.css`; there is no `tailwind.config.js` in Tailwind 4
 @source "../static/js/app.js";
 
 @plugin "@tailwindcss/typography";
-@plugin "daisyui" {
+@plugin "../.tools/daisyui.mjs" {
     themes: light --default, dark --prefersdark;
 }
 ```
@@ -54,9 +56,12 @@ so loading both produces conflicting styles.
 Check each project's own docs for exact install steps and APIs. Whichever you choose, it has to meet this
 template's constraints:
 
-1. **Tailwind 4 CSS-first config.** Replace `@plugin "daisyui"` in `styles/input.css` with the library's CSS
-   import, and add `@source` lines for any templ component directories the library adds. For Basecoat the
-   README shows `@import "basecoat-css";` after `@import "tailwindcss";`.
+1. **Tailwind 4 CSS-first config, without npm.** Replace the daisyUI `@plugin` line in `styles/input.css`
+   with the library's CSS, and add `@source` lines for any templ component directories the library adds.
+   This template has no `node_modules`, so a package import like Basecoat's `@import "basecoat-css";`
+   won't resolve. Download the library's CSS from its release into the repo (or extend
+   `scripts/install-tools.sh` with a pinned checksum) and import it by relative path, e.g.
+   `@import "./vendor/basecoat.css";`.
 2. **No CDN, no inline scripts.** The CSP is `script-src 'self'`. Vendor the library's JavaScript into
    `static/js/` (add new directories to the `//go:embed` line in `static/static.go`) and load it from the
    layout with `<script src={ static.Path("js/…") } defer></script>`. If a component emits inline `<script>`
@@ -78,5 +83,5 @@ template's constraints:
    `data-theme`. Update the theme code in `static/js/app.js`, the icon rules in `styles/input.css`, and
    (if the kit needs it) add `@custom-variant dark (&:where(.dark, .dark *));` to `styles/input.css`.
 5. **Replace daisyUI classes** in `templates/**`, `static/js/app.js` (the toast uses `alert`, `btn`) and the
-   generator templates in `scripts/new-page.sh` and `scripts/new-component.sh`. Remove `daisyui` from
-   `package.json`, then run `make check`.
+   generator templates in `scripts/new-page.sh` and `scripts/new-component.sh`. Remove the daisyUI download
+   from `scripts/install-tools.sh`, then run `make check`.

@@ -12,7 +12,7 @@ STATICCHECK_VERSION ?= v0.8.1
 GOVULNCHECK_VERSION ?= v1.8.0
 
 GO_BUILD := CGO_ENABLED=0 go build -trimpath -ldflags="-s -w"
-# Directories holding Go code (avoids walking node_modules and friends).
+# Directories holding Go code (avoids walking .tools and friends).
 GO_DIRS  := cmd internal static templates
 
 .DEFAULT_GOAL := help
@@ -30,25 +30,24 @@ all: dev
 setup:
 	@bash setup.sh $(MODULE)
 
-# templ is pinned as a Go tool in go.mod, so downloading modules is enough
+# templ is pinned as a Go tool in go.mod; the Tailwind standalone CLI and the
+# daisyUI plugin are downloaded into .tools/ with pinned checksums (no Node.js).
+TAILWIND := .tools/tailwindcss
+TAILWIND_ARGS := -i ./styles/input.css -o ./static/css/styles.css
+
 tools:
-	@go mod download
+	@bash scripts/install-tools.sh
 
-deps: node_modules/.package-lock.json
+deps: tools
 	@go mod download
-
-# Reinstall npm packages only when package.json or the lockfile changes
-node_modules/.package-lock.json: package.json package-lock.json
-	@npm install --no-audit --no-fund
-	@touch $@
 
 ## Code generation -------------------------------------------------------------
 
 generate:
 	@go tool templ generate
 
-css: node_modules/.package-lock.json
-	@npm run --silent build:css
+css: tools
+	@$(TAILWIND) $(TAILWIND_ARGS) --minify
 
 ## Development ------------------------------------------------------------------
 
@@ -68,8 +67,9 @@ watch-templ:
 		--proxyport=$(PROXY_PORT) --proxybind=$(PROXY_BIND) \
 		--open-browser=false
 
-watch-css:
-	@npm run --silent dev:css
+# --watch=always keeps watching when stdin is closed (make -j, docker compose)
+watch-css: tools
+	@$(TAILWIND) $(TAILWIND_ARGS) --watch=always
 
 ## Build ------------------------------------------------------------------------
 
@@ -115,10 +115,8 @@ lint: vet
 # Everything CI runs except the dependency audit and the Docker build
 check: fmt-check lint check-docs test-race test-generators build
 
-# npm packages are build-time tooling only (just the generated CSS ships), so
-# only critical advisories fail the build; govulncheck covers the shipped binary.
-audit: node_modules/.package-lock.json
-	@npm audit --audit-level=critical
+# Scans the Go code that ships in the binary for known vulnerabilities
+audit:
 	@go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 ## Docker -----------------------------------------------------------------------
@@ -147,12 +145,12 @@ compose-down:
 ## Cleanup ----------------------------------------------------------------------
 
 clean:
-	@rm -rf bin/ tmp/ static/css/* node_modules/.cache
+	@rm -rf bin/ tmp/ static/css/*
 	@find templates -type f -name "*_templ.go" -delete
 	@echo "Clean complete"
 
 clean-all: clean
-	@rm -rf node_modules/
+	@rm -rf .tools/
 	@go clean -modcache
 	@echo "Deep clean complete"
 
@@ -193,7 +191,7 @@ help:
 	@echo "  make vet                  - go vet"
 	@echo "  make lint                 - go vet + staticcheck"
 	@echo "  make check                - Format check, lint, tests, build (CI)"
-	@echo "  make audit                - npm audit + govulncheck"
+	@echo "  make audit                - govulncheck"
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker-build         - Build Docker image"
@@ -204,7 +202,7 @@ help:
 	@echo "  make compose-down         - Stop docker compose services"
 	@echo ""
 	@echo "Maintenance:"
-	@echo "  make deps                 - Install Go and npm dependencies"
-	@echo "  make tools                - Download Go tools (templ is a go.mod tool)"
+	@echo "  make deps                 - Download Go modules and CSS tools"
+	@echo "  make tools                - Download Tailwind CLI + daisyUI into .tools/"
 	@echo "  make clean                - Clean build artifacts"
-	@echo "  make clean-all            - Clean everything including dependencies"
+	@echo "  make clean-all            - Also remove .tools/ and the Go module cache"

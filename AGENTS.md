@@ -12,7 +12,7 @@ Read more only when the task needs it:
 
 Server-rendered Go web app: `net/http` + [templ](https://templ.guide/) + htmx 2 + Tailwind CSS 4 + daisyUI 5.
 One static binary with all assets embedded. Keep it lightweight: prefer the standard library and avoid new
-dependencies (Go or npm) unless asked.
+dependencies unless asked. There is no Node.js or npm: Tailwind runs as a standalone binary.
 
 ## Commands
 
@@ -22,7 +22,7 @@ dependencies (Go or npm) unless asked.
 | Tests only | `make test` (builds CSS + generates templ first; plain `go test` can fail without them) |
 | Regenerate Go from `.templ` | `make generate` |
 | Format Go + templ | `make fmt` |
-| Build CSS | `make css` |
+| Build CSS | `make css` (downloads the Tailwind standalone CLI + daisyUI into `.tools/` first) |
 | Dev server with live reload | `make dev` → http://localhost:7331 (app itself on `PORT`, default 8080) |
 | New page / component | `make new-page <name>` / `make new-component <name>` |
 
@@ -38,6 +38,7 @@ templ is a Go tool pinned in `go.mod`: run it as `go tool templ`, never `templ` 
 - `templates/layouts`, `templates/pages`, `templates/components`: `.templ` files
 - `static/`: Go package that embeds and serves assets; `static/js/app.js` is the only app JavaScript
 - `styles/input.css`: Tailwind + daisyUI configuration (no `tailwind.config.js`)
+- `scripts/install-tools.sh`: pinned versions and checksums of the Tailwind CLI and daisyUI bundle
 
 ## Rules
 
@@ -110,9 +111,10 @@ keep them passing with `make test-race`.
 - Commit generated or local files: `*_templ.go`, `static/css/styles.css`, `bin/`, `.env`.
 - Loosen the CSP (`'unsafe-inline'`, `'unsafe-eval'`, CDN hosts) or remove security middleware to make
   something work; restructure the code instead.
-- Add a client-side framework, a CSS framework alongside daisyUI, or new Go/npm dependencies without being
+- Add a client-side framework, a CSS framework alongside daisyUI, or new Go dependencies or downloaded tools without being
   asked.
 - Upgrade htmx, templ, Tailwind or daisyUI as a side effect of another task.
+- Add a `package.json` or npm-based tooling; the CSS toolchain is the standalone CLI in `.tools/`.
 - Push, tag or open PRs unless asked.
 
 ## Gotchas

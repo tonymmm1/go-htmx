@@ -4,9 +4,11 @@
 @source "../internal";
 @source "../static/js/app.js";
 
+/* Built into the Tailwind standalone CLI. */
 @plugin "@tailwindcss/typography";
 
-@plugin "daisyui" {
+/* Installed by scripts/install-tools.sh (make tools); no npm needed. */
+@plugin "../.tools/daisyui.mjs" {
     themes: light --default, dark --prefersdark;
 }
 

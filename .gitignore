@@ -22,7 +22,7 @@ go.work.sum
 !.env.example
 
 # Dependencies
-node_modules/
+.tools/
 vendor/
 
 # Build artifacts

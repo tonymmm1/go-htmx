@@ -22,7 +22,7 @@ docker-compose*.yml
 *~
 
 # Dependencies (will be installed in container)
-node_modules
+.tools
 vendor
 
 # Build artifacts

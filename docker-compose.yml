@@ -30,7 +30,8 @@ services:
       - .:/app
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/root/.cache/go-build
-      - node-modules:/app/node_modules
+      # Linux CSS tools for the container, kept apart from the host's .tools/
+      - css-tools:/app/.tools
     ports:
       - "${PORT:-8080}:8080"
       - "${PROXY_PORT:-7331}:7331"
@@ -45,4 +46,4 @@ services:
 volumes:
   go-mod-cache:
   go-build-cache:
-  node-modules:
+  css-tools:
