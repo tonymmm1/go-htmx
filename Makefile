@@ -18,7 +18,7 @@ GO_DIRS  := cmd internal static templates
 .DEFAULT_GOAL := help
 
 .PHONY: all help setup tools deps generate css dev watch-templ watch-css \
-	build run test test-race test-generators fmt fmt-check vet lint check audit \
+	build run test test-race test-generators check-docs fmt fmt-check vet lint check audit \
 	docker-build docker-up docker-down compose-up compose-dev compose-down \
 	clean clean-all new-page new-component
 
@@ -91,6 +91,10 @@ test-race: css generate
 test-generators: css
 	@bash scripts/test-generators.sh
 
+# Verify paths and make targets mentioned in AGENTS.md and docs/ui.md exist
+check-docs:
+	@bash scripts/check-docs.sh
+
 fmt:
 	@gofmt -w $(GO_DIRS)
 	@go tool templ fmt templates
@@ -107,7 +111,7 @@ lint: vet
 	@go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) ./...
 
 # Everything CI runs except the dependency audit and the Docker build
-check: fmt-check lint test-race test-generators build
+check: fmt-check lint check-docs test-race test-generators build
 
 # npm packages are build-time tooling only (just the generated CSS ships), so
 # only critical advisories fail the build; govulncheck covers the shipped binary.
@@ -181,6 +185,7 @@ help:
 	@echo "  make test                 - Run tests"
 	@echo "  make test-race            - Run tests with the race detector"
 	@echo "  make test-generators      - Smoke-test project generators"
+	@echo "  make check-docs           - Check paths and targets referenced in AGENTS.md"
 	@echo "  make fmt                  - Format Go and templ files"
 	@echo "  make fmt-check            - Fail if Go or templ files need formatting"
 	@echo "  make vet                  - go vet"
