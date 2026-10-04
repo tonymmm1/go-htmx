@@ -25,6 +25,9 @@ for doc in "$@"; do
         path="${path%/}"
         [[ -e "${path%%/*}" ]] || continue
         [[ -e "$path" ]] && continue
+        # Build outputs such as static/css/styles.css are gitignored and may
+        # not exist yet.
+        git check-ignore -q -- "$path" 2>/dev/null && continue
         echo "$doc: path does not exist: $path"
         status=1
     done < <(grep -oE '`[^` ]+`' "$doc" | tr -d '`' | grep -E '^[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_.-]+)*/?$' | sort -u)
