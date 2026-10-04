@@ -109,7 +109,7 @@ func (s *Server) Run(ctx context.Context) error {
 	case <-ctx.Done():
 	}
 
-	slog.Info("shutting down", slog.Duration("timeout", shutdownTimeout))
+	slog.Info("shutting down", slog.String("timeout", shutdownTimeout.String()))
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {

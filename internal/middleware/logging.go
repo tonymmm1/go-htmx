@@ -37,7 +37,7 @@ func requestLogger(logger *slog.Logger, trustedProxies []netip.Prefix) middlewar
 					slog.String("path", r.URL.Path),
 					slog.Int("status", status),
 					slog.Int64("bytes", recorder.bytes),
-					slog.Duration("duration", time.Since(started)),
+					slog.Float64("duration_ms", float64(time.Since(started).Microseconds())/1000),
 					slog.String("ip", clientIP(r, trustedProxies).String()),
 				}
 				if aborted != nil {

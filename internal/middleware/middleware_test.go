@@ -139,8 +139,8 @@ func TestRequestLoggerRecordsResponse(t *testing.T) {
 			t.Errorf("logged %s = %v, want %v", key, entry[key], value)
 		}
 	}
-	if _, ok := entry["duration"]; !ok {
-		t.Error("duration was not logged")
+	if _, ok := entry["duration_ms"]; !ok {
+		t.Error("duration_ms was not logged")
 	}
 }
 

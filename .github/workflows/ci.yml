@@ -89,8 +89,12 @@ jobs:
         run: |
           docker run -d --name app -p 8080:8080 go-htmx:ci
           for i in $(seq 1 20); do
-            curl -fsS -o /dev/null http://127.0.0.1:8080/ && break
+            curl -fsS -o /dev/null http://127.0.0.1:8080/healthz && break
             sleep 0.5
           done
           curl -fsS -o /dev/null http://127.0.0.1:8080/
+          # The stylesheet must be embedded in the binary.
+          css="$(curl -fsS http://127.0.0.1:8080/ | grep -o '/static/css/styles.css?v=[0-9a-f]*')"
+          curl -fsS -o /dev/null "http://127.0.0.1:8080$css"
+          docker exec app /app/server -healthcheck
           docker rm -f app
