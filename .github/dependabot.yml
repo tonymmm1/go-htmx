@@ -8,6 +8,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # templ's parser library. Newer commits change its API and stop
+      # `go tool templ` compiling; it moves with templ, which pins it.
+      - dependency-name: github.com/a-h/parse
     groups:
       go-modules:
         update-types: [minor, patch]
