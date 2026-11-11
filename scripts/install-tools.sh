@@ -13,22 +13,22 @@
 
 set -euo pipefail
 
-readonly TAILWIND_VERSION="v4.3.3"
-readonly DAISYUI_VERSION="v5.7.22"
+readonly TAILWIND_VERSION="v4.3.5"
+readonly DAISYUI_VERSION="v5.7.50"
 
 tailwind_sha256() {
     case "$1" in
-        tailwindcss-linux-arm64) echo 55fd0b241214eff3de1e8ee4f22796662f2d2e7a49bcfca7477cfd0bac398195 ;;
-        tailwindcss-linux-arm64-musl) echo 71ea4be79c9de9827545682df3e040053fb535d37c71ed2cfdedf9385a0868e0 ;;
-        tailwindcss-linux-x64) echo dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a ;;
-        tailwindcss-linux-x64-musl) echo a04d34ceacc8f52cbe8920ad846cdeb61d3d0021dba32db0d1f77c9d9fad7a6c ;;
-        tailwindcss-macos-arm64) echo cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d ;;
-        tailwindcss-macos-x64) echo 7922e0953f2110c05976e3bf58f14e643d90427575e766b7d433f5f80cbee7e1 ;;
-        tailwindcss-windows-x64.exe) echo e0e260ce048014e9268f6237ff18f8ccf02cef521cbd0ae04e82c2cdf7aa3955 ;;
+        tailwindcss-linux-arm64) echo ffcd0d21dbd7c605dc12743ff0c0b47debc963c86b399674084c1c8f2c96ecad ;;
+        tailwindcss-linux-arm64-musl) echo 564dad3028c029b0c69042c66a7a79873ed7289b73fcb7b37973fbf79cb9a32f ;;
+        tailwindcss-linux-x64) echo e47695cee3f0d90623a91f3939b08bdee610eb5ad99340adff9d4145b284d6cc ;;
+        tailwindcss-linux-x64-musl) echo bb050edd13f15006d872a9bb1772b908618a8df6806d30bf095cba26a09e640b ;;
+        tailwindcss-macos-arm64) echo f3f4f5d1727e2b693b8f1c9a1492b5dd87008c86ea286bee1589cb458e6235fc ;;
+        tailwindcss-macos-x64) echo a63702686a3ed048b3135d84a73be49ea9d47f880c9b20e54b3ef60934ad8cdf ;;
+        tailwindcss-windows-x64.exe) echo 2803583268c53f4713e89943e211081fddb186c0a4a7d07b5c342c6ae853ec95 ;;
         *) return 1 ;;
     esac
 }
-readonly DAISYUI_SHA256="abd307ebaa5913d26518a55d1946da89ebdd58dfcdf880a9a862c938965d3784"
+readonly DAISYUI_SHA256="d69de07c7463bb1f41548e2688f88ee105cdadf9779fce5b3c47b3bfaa6be472"
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly TOOLS_DIR="$SCRIPT_DIR/../.tools"
