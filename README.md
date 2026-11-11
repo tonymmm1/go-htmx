@@ -11,8 +11,8 @@ embedded, and needs no Node.js: CSS is built with the Tailwind standalone CLI.
 
 ## Why it's lightweight
 
-- **The whole home page is about 30 KB with Brotli** (34 KB gzipped), including the stylesheet (~12 KB),
-  htmx (~15 KB) and the app script (~1 KB). No client framework and no CDN: htmx 2.0.11 is vendored in
+- **The whole home page is about 28 KB with Brotli** (31 KB gzipped), including the stylesheet (~12 KB),
+  htmx (~12 KB) and the app script (~2 KB). No client framework and no CDN: htmx 4.0.1 is vendored in
   `static/js/`.
 - **A ~9 MB static binary** (`CGO_ENABLED=0`, stripped) contains the server, the compiled templates and
   every static asset.
@@ -93,7 +93,7 @@ static/
   static.go               Embeds and serves assets (go:embed, hashing, Brotli/gzip, ETags)
   css/                    Tailwind output (generated, gitignored)
   js/app.js               Theme toggle and htmx error toasts
-  js/htmx.min.js          Vendored htmx 2.0.11
+  js/htmx.min.js          Vendored htmx 4.0.1
   img/favicon.svg
 styles/input.css          Tailwind entry point (daisyUI themes, custom CSS)
 .tools/                   Tailwind standalone CLI + daisyUI bundle (downloaded, gitignored)
@@ -151,10 +151,11 @@ func (h *Handler) HandleAbout(w http.ResponseWriter, r *http.Request) {
 
 | Request | Response |
 |---------|----------|
-| Normal navigation, boosted link or form (`hx-boost`), history restore | Full document |
-| Other htmx request, e.g. `hx-get="/about" hx-target="#panel"` | Page content only, no `<html>`, nav or footer |
+| Normal navigation, boosted link or form (`hx-boost`), history restore, `hx-select` | Full document |
+| htmx request that targets part of the page, e.g. `hx-get="/about" hx-target="#panel"` | Page content only, no `<html>`, nav or footer |
 
-It sets `Vary: HX-Request, HX-Boosted, HX-History-Restore-Request` so caches keep the two apart. Unknown
+htmx 4 sends `HX-Request-Type: partial` for the second kind and `full` for the first; `RenderPage` keys on
+that header and sets `Vary: HX-Request, HX-Request-Type` so caches keep the two apart. Unknown
 paths fall through to the `GET /` catch-all, which renders the 404 page with `RenderPage`.
 
 ### Fragments
@@ -171,8 +172,8 @@ func (h *Handler) HandleExampleTime(w http.ResponseWriter, r *http.Request) {
 ```
 
 Both functions render into a pooled buffer first, so a template error becomes a clean 500 instead of a
-half-written page. `pages.IsHTMX(r)` and `pages.IsBoosted(r)` are available if a handler needs to branch on
-the request type itself.
+half-written page. `pages.IsHTMX(r)`, `pages.IsBoosted(r)` and `pages.IsPartial(r)` are available if a handler
+needs to branch on the request type itself.
 
 ### Components
 
@@ -186,14 +187,24 @@ Use it from a page with `@components.FeatureCard("Title")` after importing
 ### Frontend rules (CSP)
 
 The Content Security Policy only allows same-origin scripts and styles, so templates must not use inline
-`<script>`, `style="..."` or `hx-on:*` attributes. htmx runs with `allowEval: false` and
-`allowScriptTags: false` (see `htmxConfig` in `templates/layouts/layout.templ`), which also disables
-`hx-vals="js:..."` and event filters like `hx-trigger="click[ctrlKey]"`. Put behaviour in
+`<script>`, `style="..."` or `hx-on:*` attributes. The CSP has no `'unsafe-eval'`, so htmx features that
+compile JavaScript at runtime (`hx-on:*`, `hx-vals="js:..."`, event filters like
+`hx-trigger="click[ctrlKey]"`) don't work either. Put behaviour in
 `static/js/app.js` (or a new file under `static/js/`) as event listeners on `document`, the way the theme
 toggle and error toasts are written.
 
-`app.js` shows a toast when an htmx request fails (4xx/5xx, network error, timeout). Boosted navigation
-that returns an HTML error page, such as the 404, is swapped in like a normal page load instead.
+`app.js` shows a toast when an htmx request fails (4xx/5xx, network error, timeout) and keeps the error
+body out of the page; htmx 4 would otherwise swap it in. Boosted navigation that returns an HTML error page,
+such as the 404, is swapped in like a normal page load instead. An element with an `hx-status:<code>`
+attribute (for example `hx-status:422="target:#errors"`) handles its own error responses.
+
+### htmx 4
+
+The vendored htmx is 4.x. If you're used to htmx 2, the differences that matter here are explicit
+inheritance (`hx-boost:inherited` on `<body>`), new event names (`htmx:after:process`,
+`htmx:response:error`, `htmx:error`), and error responses swapping by default. The
+[htmx 4 changes](https://four.htmx.org/docs/whats-new-in-htmx-4) list everything; `AGENTS.md` has the short
+version.
 
 ### Static assets
 

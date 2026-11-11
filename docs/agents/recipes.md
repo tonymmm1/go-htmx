@@ -86,8 +86,8 @@ func (h *Handler) HandleStats(w http.ResponseWriter, r *http.Request) {
 
 ## Add a form with inline validation
 
-htmx doesn't swap 4xx/5xx responses (app.js shows a toast instead). For errors the user should see next
-to the field, re-render the form with status 200:
+A 4xx/5xx response to a fragment request is not swapped (app.js shows a toast instead). For errors the
+user should see next to the field, re-render the form with status 200:
 
 ```templ
 // templates/components/subscribe.templ
@@ -137,6 +137,9 @@ func (h *Handler) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
 
 - Validate on the server. HTML attributes like `type="email"` and `required` are a convenience only.
 - Use 4xx only for requests the UI shouldn't produce (malformed input, unknown action); those toast.
+- To return validation errors with a 422 instead, give the form `hx-status:422="target:#subscribe-errors"`
+  (or `swap:outerHTML`); an element with a matching `hx-status` attribute handles its own error responses
+  and app.js stays out of it.
 - State-changing routes must not be `GET`. CSRF protection covers unsafe methods automatically.
 - Test the error and success paths with `performRequest(http.MethodPost, "/subscribe", "email=x")`.
 
@@ -163,7 +166,8 @@ document.addEventListener("click", function (event) {
 ```
 
 - To initialise something on content htmx inserts (including the first page load), listen for
-  `htmx:load` on `document`. app.js runs before htmx loads, so use the event rather than `htmx.onLoad`.
+  `htmx:after:process` on `document` (htmx 2 called it `htmx:load`). app.js runs before htmx loads, so use
+  the event rather than `htmx.onLoad`.
 - Any Tailwind/daisyUI class that app.js adds must appear literally in app.js; it's in Tailwind's `@source`
   list.
 - `hx-confirm="Delete this?"` works under the CSP and needs no JavaScript.
@@ -186,7 +190,8 @@ document.addEventListener("click", function (event) {
 Follow the "Vendored files" note at the top of `static/static.go`: replace `static/js/htmx.min.js` from
 the new npm tarball, verify it against the SRI hash htmx publishes, and update the version and hash in
 `static/static.go` and in `TestVendoredHTMXIntegrity` (`static/static_test.go`). Check the htmx changelog
-for config changes that affect the layout's `htmxConfig` constant.
+for config changes that affect the layout's `htmxConfig` constant, and for event or `ctx` changes that affect
+the error handling in `static/js/app.js`.
 
 ## Add a configuration variable
 

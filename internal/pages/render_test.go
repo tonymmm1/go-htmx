@@ -45,10 +45,14 @@ func TestPagesRenderContentOnlyForHTMXRequests(t *testing.T) {
 		headers  map[string]string
 		wantFull bool
 	}{
+		// Header sets as htmx 4 sends them.
 		{name: "normal navigation", wantFull: true},
-		{name: "boosted link", headers: map[string]string{"HX-Request": "true", "HX-Boosted": "true"}, wantFull: true},
-		{name: "history restore", headers: map[string]string{"HX-Request": "true", "HX-History-Restore-Request": "true"}, wantFull: true},
-		{name: "htmx request", headers: map[string]string{"HX-Request": "true"}, wantFull: false},
+		{name: "boosted link", headers: map[string]string{"HX-Request": "true", "HX-Boosted": "true", "HX-Request-Type": "full"}, wantFull: true},
+		{name: "history restore", headers: map[string]string{"HX-Request": "true", "HX-History-Restore-Request": "true", "HX-Request-Type": "full"}, wantFull: true},
+		{name: "hx-select request", headers: map[string]string{"HX-Request": "true", "HX-Request-Type": "full"}, wantFull: true},
+		{name: "targeted htmx request", headers: map[string]string{"HX-Request": "true", "HX-Request-Type": "partial"}, wantFull: false},
+		// Without HX-Request-Type the full page is the safe answer.
+		{name: "htmx request without request type", headers: map[string]string{"HX-Request": "true"}, wantFull: true},
 	}
 
 	for _, test := range tests {
@@ -65,14 +69,14 @@ func TestPagesRenderContentOnlyForHTMXRequests(t *testing.T) {
 			if full := strings.Contains(body, "<html"); full != test.wantFull {
 				t.Errorf("response contains <html> = %v, want %v", full, test.wantFull)
 			}
-			if vary := recorder.Header().Values("Vary"); !strings.Contains(strings.Join(vary, ","), "HX-Request") {
-				t.Errorf("Vary = %q, want it to include HX-Request", vary)
+			if vary := strings.Join(recorder.Header().Values("Vary"), ","); !strings.Contains(vary, "HX-Request-Type") {
+				t.Errorf("Vary = %q, want it to include HX-Request-Type", vary)
 			}
 		})
 	}
 
 	t.Run("not found keeps its status", func(t *testing.T) {
-		recorder := performRequestWithHeaders(http.MethodGet, "/missing", "", map[string]string{"HX-Request": "true"})
+		recorder := performRequestWithHeaders(http.MethodGet, "/missing", "", map[string]string{"HX-Request": "true", "HX-Request-Type": "partial"})
 		if recorder.Code != http.StatusNotFound {
 			t.Fatalf("GET /missing returned %d, want %d", recorder.Code, http.StatusNotFound)
 		}
@@ -92,11 +96,12 @@ func TestLayoutHead(t *testing.T) {
 		`<html lang="en">`,
 		"<title>About · Go-HTMX</title>",
 		`<meta name="description" content="What is included in the Go-HTMX starter template.">`,
-		`<meta name="htmx-config" content="{&#34;includeIndicatorStyles&#34;:false`,
+		`<meta name="htmx-config" content="{&#34;includeIndicatorCSS&#34;:false}">`,
 		`<script src="/static/js/app.js?v=`,
 		`<script src="/static/js/htmx.min.js?v=`,
 		`<link rel="icon" href="/static/img/favicon.svg?v=`,
-		`hx-boost="true"`,
+		`hx-boost:inherited="true"`,
+		`hx-indicator:inherited="#page-progress"`,
 		`<a href="/about" class="menu-active" aria-current="page">About</a>`,
 		`<div id="toasts"`,
 	} {

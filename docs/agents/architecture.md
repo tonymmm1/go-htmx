@@ -41,17 +41,23 @@ IdleTimeout 120s, 5s graceful shutdown. HTTP/1.1 and cleartext HTTP/2 (h2c).
 - `Render(w, r, status, component)` renders into a pooled buffer, then writes `Content-Type`,
   `Content-Length`, status and body. A render error becomes a clean 500 with nothing partial sent.
 - `RenderPage(w, r, status, page)` is for components that use `layouts.Layout`. It adds
-  `Vary: HX-Request, HX-Boosted, HX-History-Restore-Request`. A plain htmx request (not boosted, not a
-  history restore) gets the page content only; `Layout` checks `layouts.WithContentOnly(ctx)` and skips
-  the document shell. Normal and boosted navigations get the full document.
+  `Vary: HX-Request, HX-Request-Type`. An htmx request with `HX-Request-Type: partial` (a targeted swap)
+  gets the page content only; `Layout` checks `layouts.WithContentOnly(ctx)` and skips the document shell.
+  Everything else gets the full document: normal navigations, and the requests htmx 4 marks `full`
+  (boosted links and forms, history restores, `hx-select`).
 - `RenderError(w, r, status)` renders the styled error page (`templates/pages/error.templ`) with
   `Cache-Control: no-store`.
-- `IsHTMX(r)` and `IsBoosted(r)` read the `HX-Request` and `HX-Boosted` headers.
+- `IsHTMX(r)`, `IsBoosted(r)` and `IsPartial(r)` read the `HX-Request`, `HX-Boosted` and
+  `HX-Request-Type` headers.
 
-The layout (`templates/layouts/layout.templ`) sets `hx-boost="true"` on `<body>`, so links and forms
+The layout (`templates/layouts/layout.templ`) sets `hx-boost:inherited="true"` and
+`hx-indicator:inherited="#page-progress"` on `<body>` (htmx 4 inheritance is explicit), so links and forms
 navigate with htmx and swap the body. htmx is configured through the `htmxConfig` constant (rendered as
-`<meta name="htmx-config">`): indicator styles off (they live in `styles/input.css`), `allowEval` and
-`allowScriptTags` off (CSP), and history-restore requests get full pages.
+`<meta name="htmx-config">`): only `includeIndicatorCSS: false`, since the indicator styles live in
+`styles/input.css`. The rest are htmx 4 defaults: same-origin requests, a 60s request timeout, and history
+restores that re-fetch the page from the server (`HX-History-Restore-Request: true`, swapped into `<body>`).
+htmx 4 has no `allowEval`; features that need `new Function()` (`hx-on:*`, `js:` values, `hx-trigger`
+filters) fail under the CSP, which has no `'unsafe-eval'`.
 
 ## Client side (`static/js/app.js`)
 
@@ -59,10 +65,12 @@ The only app JavaScript. It's loaded without `defer` so the saved theme applies 
 everything else is an event listener on `document` (so it survives hx-boost body swaps):
 
 - theme toggle: `data-theme` on `<html>`, saved in `localStorage`;
-- error toasts for `htmx:responseError`, `htmx:sendError` and `htmx:timeout` (text from the status code,
-  inserted with `textContent`);
-- boosted navigations that receive an HTML 4xx/5xx page (e.g. the 404 page) are swapped in like a normal
-  page load.
+- error handling for htmx 4, which swaps 4xx/5xx responses by default. On `htmx:response:error`, a
+  navigation (`HX-Request-Type: full`) that received an HTML error page, such as the 404 page, is swapped
+  in like a normal page load. Any other error response sets `ctx.swap = "none"` and stops the URL push,
+  then shows a toast, unless the source element has a matching `hx-status:<code>` attribute.
+  `htmx:error` (network failure, timeout, swap exception) shows a toast too. Toast text comes from the
+  status code and is inserted with `textContent`.
 
 ## Static assets (`static/static.go`)
 

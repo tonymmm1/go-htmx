@@ -37,13 +37,14 @@ func Render(w http.ResponseWriter, r *http.Request, status int, component templ.
 
 // RenderPage writes a full page: a component wrapped in layouts.Layout.
 //
-// Normal navigations and boosted links (hx-boost) get the whole document. Other
-// htmx requests, e.g. hx-get="/about" hx-target="#panel", get only the page
-// content because Layout skips its <html>, nav, and footer. The response sets
-// Vary so caches never mix the two.
+// Normal navigations, boosted links and forms (hx-boost), history restores and
+// hx-select requests get the whole document. htmx requests that target part of
+// the page, e.g. hx-get="/about" hx-target="#panel", get only the page content
+// because Layout skips its <html>, nav, and footer. The response sets Vary so
+// caches never mix the two.
 func RenderPage(w http.ResponseWriter, r *http.Request, status int, page templ.Component) {
-	w.Header().Add("Vary", "HX-Request, HX-Boosted, HX-History-Restore-Request")
-	if wantsContentOnly(r) {
+	w.Header().Add("Vary", "HX-Request, HX-Request-Type")
+	if IsPartial(r) {
 		r = r.WithContext(layouts.WithContentOnly(r.Context()))
 	}
 	Render(w, r, status, page)
@@ -68,11 +69,12 @@ func IsBoosted(r *http.Request) bool {
 	return r.Header.Get("HX-Boosted") == "true"
 }
 
-// wantsContentOnly reports whether a page request should skip the layout.
-// History restores (back button after an htmx cache miss) replace the whole
-// body, so they always get the full page.
-func wantsContentOnly(r *http.Request) bool {
-	return IsHTMX(r) && !IsBoosted(r) && r.Header.Get("HX-History-Restore-Request") != "true"
+// IsPartial reports whether htmx will swap the response into an element other
+// than <body> (HX-Request-Type: partial). Boosted navigation, history restores
+// and hx-select requests are "full" and expect a whole document; so does any
+// request without the header, which is always safe to swap.
+func IsPartial(r *http.Request) bool {
+	return IsHTMX(r) && r.Header.Get("HX-Request-Type") == "partial"
 }
 
 // maxPooledBuffer keeps an unusually large page from pinning memory in the pool.

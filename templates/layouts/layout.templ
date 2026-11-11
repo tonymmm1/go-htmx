@@ -5,14 +5,18 @@ import (
 	"github.com/tonymmm1/go-htmx/static"
 )
 
-// htmxConfig is read by htmx from <meta name="htmx-config">.
-//   - includeIndicatorStyles: .htmx-indicator styles live in styles/input.css
-//     (htmx would otherwise inject an inline <style>, which the CSP blocks).
-//   - allowEval, allowScriptTags: keep htmx compatible with script-src 'self';
-//     hx-on:*, hx-vals="js:...", and hx-trigger filters like [ctrlKey] are off.
-//   - historyRestoreAsHxRequest: history cache misses must get the full page,
-//     not the content-only response pages.RenderPage sends to htmx requests.
-const htmxConfig = `{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"historyRestoreAsHxRequest":false}`
+// htmxConfig is read by htmx (4.x) from <meta name="htmx-config">.
+//   - includeIndicatorCSS: .htmx-indicator styles live in styles/input.css,
+//     next to the page progress bar that uses them.
+//
+// Everything else uses htmx 4's defaults, which suit this app: same-origin
+// requests only (mode), history restores fetch the full page from the server,
+// and requests time out after 60s. htmx 4 has no allowEval switch; the CSP
+// (no 'unsafe-eval') is what stops hx-on:*, hx-vals="js:..." and hx-trigger
+// filters like [ctrlKey], so don't use them (see AGENTS.md).
+//
+// Inheritance is explicit in htmx 4: attributes on <body> carry :inherited.
+const htmxConfig = `{"includeIndicatorCSS":false}`
 
 // Layout wraps a page in the document shell. When the context comes from
 // WithContentOnly, it renders just the page content.
@@ -59,7 +63,7 @@ templ Layout(meta Meta) {
 				<script src={ static.Path("js/app.js") }></script>
 				<script src={ static.Path("js/htmx.min.js") } defer></script>
 			</head>
-			<body class="flex min-h-screen flex-col" hx-boost="true" hx-indicator="#page-progress">
+			<body class="flex min-h-screen flex-col" hx-boost:inherited="true" hx-indicator:inherited="#page-progress">
 				<div id="page-progress" class="page-progress htmx-indicator" aria-hidden="true"></div>
 				<header class="navbar bg-base-100 shadow-lg">
 					<div class="flex-1">
