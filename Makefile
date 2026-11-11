@@ -11,7 +11,7 @@ IMAGE      ?= $(APP_NAME)
 CONTAINER  ?= $(APP_NAME)-dev
 
 STATICCHECK_VERSION ?= v0.8.2
-GOVULNCHECK_VERSION ?= v1.8.0
+GOVULNCHECK_VERSION ?= v1.9.0
 
 GO_BUILD := CGO_ENABLED=0 go build -trimpath -ldflags="-s -w"
 # Directories holding Go code (avoids walking .tools and friends).
