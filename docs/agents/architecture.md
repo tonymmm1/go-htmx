@@ -24,9 +24,10 @@ internal/server/server.go   http.ServeMux:
 5. Rate limiter: 100 requests/minute per client IP (IPv6 grouped by /64). `/static/` and `/healthz` are
    exempt. The client IP comes from `X-Forwarded-For` only when the TCP peer is in `TRUSTED_PROXIES`.
 6. `http.NewCrossOriginProtection()`: rejects cross-site POST/PUT/PATCH/DELETE (CSRF).
-7. `gzipResponses`: compresses text-like responses unless `Content-Encoding` is already set (so
-   precompressed static assets pass through); pooled writers; supports `Flush`. gzip only: Brotli is
-   used just for static assets, compressed once at startup.
+7. `gzipResponses`: compresses text-like responses unless `Content-Encoding` or an `ETag` is already
+   set (precompressed static assets, and any handler managing its own representations, pass through);
+   pooled writers; supports `Flush`. gzip only: Brotli is used just for static assets, compressed once
+   at startup. `Accept-Encoding` negotiation for both lives in `internal/contentcoding`.
 
 Server limits (`internal/server/server.go`): ReadHeaderTimeout 5s, ReadTimeout 15s, WriteTimeout 30s,
 IdleTimeout 120s, 5s graceful shutdown. HTTP/1.1 and cleartext HTTP/2 (h2c).
@@ -65,7 +66,8 @@ everything else is an event listener on `document` (so it survives hx-boost body
   if it is smaller than the original. `negotiateEncoding` picks br > gzip > identity from
   `Accept-Encoding` (q-values, `q=0`, `*`; ties prefer br). Responses carry `Vary: Accept-Encoding`
   and per-variant ETags (`"<hash>-br"`, `"<hash>-gz"`, `"<hash>"`); Range requests get the identity
-  bytes. Brotli adds roughly 200ms to startup for the default assets (logged on startup).
+  bytes. Files and codings are compressed in parallel, once per process; Brotli adds roughly 175ms to startup
+  for the default assets (logged on startup).
   `static.Path("css/styles.css")` returns `/static/css/styles.css?v=<hash>`. Requests with the current
   hash get `Cache-Control: public, max-age=31536000, immutable`; others get `max-age=300` plus an ETag.
 - **Development** (`APP_ENV=development`): files are read from `static/` on disk on every request with

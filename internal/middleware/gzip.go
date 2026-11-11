@@ -5,9 +5,10 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/tonymmm1/go-htmx/internal/contentcoding"
 )
 
 // gzipWriters reuses compressors; each gzip.Writer holds several hundred KB
@@ -18,10 +19,12 @@ var gzipWriters = sync.Pool{
 
 // gzipResponses compresses text-like responses for clients that accept gzip.
 // Responses that already have a Content-Encoding (such as precompressed static
-// assets) are passed through untouched.
+// assets) or an ETag are passed through untouched: a handler that sets an ETag
+// manages its own representations, and compressing on the fly would give two
+// different bodies the same strong validator.
 func gzipResponses(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodHead || r.Header.Get("Range") != "" || !acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		if r.Method == http.MethodHead || r.Header.Get("Range") != "" || contentcoding.Negotiate(r, "gzip") == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -54,7 +57,8 @@ func (w *gzipResponseWriter) WriteHeader(status int) {
 	w.wroteHeader = true
 
 	if status != http.StatusNoContent && status != http.StatusNotModified && status != http.StatusPartialContent &&
-		w.Header().Get("Content-Encoding") == "" && compressibleContentType(w.Header().Get("Content-Type")) {
+		w.Header().Get("Content-Encoding") == "" && w.Header().Get("ETag") == "" &&
+		compressibleContentType(w.Header().Get("Content-Type")) {
 		w.Header().Del("Content-Length")
 		w.Header().Add("Vary", "Accept-Encoding")
 		w.Header().Set("Content-Encoding", "gzip")
@@ -100,29 +104,6 @@ func (w *gzipResponseWriter) close() {
 	w.gzipWriter.Reset(io.Discard)
 	gzipWriters.Put(w.gzipWriter)
 	w.gzipWriter = nil
-}
-
-func acceptsGzip(value string) bool {
-	for _, encoding := range strings.Split(value, ",") {
-		parts := strings.Split(strings.TrimSpace(encoding), ";")
-		if !strings.EqualFold(strings.TrimSpace(parts[0]), "gzip") {
-			continue
-		}
-
-		quality := 1.0
-		for _, parameter := range parts[1:] {
-			name, raw, found := strings.Cut(strings.TrimSpace(parameter), "=")
-			if found && strings.EqualFold(name, "q") {
-				parsed, err := strconv.ParseFloat(raw, 64)
-				if err != nil {
-					return false
-				}
-				quality = parsed
-			}
-		}
-		return quality > 0
-	}
-	return false
 }
 
 func compressibleContentType(value string) bool {

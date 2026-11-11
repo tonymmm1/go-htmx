@@ -34,6 +34,7 @@ templ is a Go tool pinned in `go.mod`: run it as `go tool templ`, never `templ` 
 - `internal/config`: env config (`PORT`, `APP_ENV`, `TRUSTED_PROXIES`)
 - `internal/server`: mux, `/healthz`, timeouts, graceful shutdown
 - `internal/middleware`: logging, recovery, security headers/CSP, CSRF, rate limit, gzip
+- `internal/contentcoding`: `Accept-Encoding` negotiation shared by the gzip middleware and `static`
 - `internal/pages`: route registration and handlers, `Render`/`RenderPage` helpers
 - `templates/layouts`, `templates/pages`, `templates/components`: `.templ` files
 - `static/`: Go package that embeds and serves assets; `static/js/app.js` is the only app JavaScript

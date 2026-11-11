@@ -75,6 +75,7 @@ internal/
   config/                 PORT, APP_ENV, TRUSTED_PROXIES (+ optional .env)
   server/                 Routes, middleware stack, timeouts, graceful shutdown, /healthz
   middleware/             Logging, recovery, security headers, rate limit, gzip
+  contentcoding/          Accept-Encoding negotiation (shared by gzip middleware and static)
   pages/
     pages.go              Routes and handlers
     render.go             RenderPage, Render, IsHTMX, IsBoosted
@@ -202,7 +203,8 @@ In production every compressible asset is compressed once at startup with Brotli
 (level 9), keeping each variant only if it is smaller than the original. Clients get Brotli if they accept
 it, otherwise gzip, otherwise the original bytes (`Accept-Encoding` q-values are honored), with
 `Vary: Accept-Encoding` and a per-variant ETag. Range requests are served from the original bytes.
-Brotli at quality 11 adds about 0.2 seconds to startup for the default assets; the startup log
+Brotli at quality 11 adds about 0.2 seconds to startup for the default assets (files are compressed in
+parallel, once per process); the startup log
 line reports the time and the total sizes. In development assets are read from disk and not precompressed
 (the gzip middleware still compresses text responses).
 
@@ -253,8 +255,9 @@ The middleware stack (`internal/middleware`), outermost first:
    the proxy's limit.
 6. **CSRF protection**: `http.CrossOriginProtection` rejects cross-origin `POST`/`PUT`/`PATCH`/`DELETE`
    from browsers using `Sec-Fetch-Site` and `Origin`. No tokens needed.
-7. **gzip** for text, JSON, JavaScript, XML and SVG responses. Precompressed (Brotli or gzip) static
-   assets and `text/event-stream` pass through untouched. Dynamic responses are not Brotli-compressed:
+7. **gzip** for text, JSON, JavaScript, XML and SVG responses. Static assets, `text/event-stream` and any
+   response that already sets an `ETag` or `Content-Encoding` pass through untouched (a handler with an
+   ETag manages its own representations). Dynamic responses are not Brotli-compressed:
    Brotli's high levels are too slow per request.
 
 The server sets read-header (5s), read (15s), write (30s) and idle (120s) timeouts, caps headers at 64 KB

@@ -428,12 +428,50 @@ func TestStackFlushesGzipStreams(t *testing.T) {
 	}
 }
 
-func TestAcceptsGzipHonorsZeroQuality(t *testing.T) {
-	if acceptsGzip("gzip; q=0") {
-		t.Fatal("gzip with q=0 should not be accepted")
+func TestGzipResponsesHonorsAcceptEncoding(t *testing.T) {
+	for header, want := range map[string]string{
+		"gzip; q=0":       "",
+		"br, gzip; q=0.5": "gzip",
+		"*":               "gzip",
+		"x-gzip":          "gzip",
+		"gzip;q=-1, *":    "",
+		"":                "",
+	} {
+		handler := gzipResponses(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte("<p>hello</p>"))
+		}))
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
+		request.Header.Set("Accept-Encoding", header)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		if got := recorder.Header().Get("Content-Encoding"); got != want {
+			t.Errorf("Accept-Encoding %q: Content-Encoding = %q, want %q", header, got, want)
+		}
 	}
-	if !acceptsGzip("br, gzip; q=0.5") {
-		t.Fatal("gzip with a positive quality should be accepted")
+}
+
+// A response with an ETag already identifies one representation; compressing
+// it on the fly would serve a different body under the same strong ETag.
+func TestGzipResponsesSkipsResponsesWithETag(t *testing.T) {
+	handler := gzipResponses(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("ETag", `"abc"`)
+		_, _ = w.Write([]byte("body { color: red }"))
+	}))
+	request := httptest.NewRequest(http.MethodGet, "http://example.com/static/css/styles.css", nil)
+	request.Header.Set("Accept-Encoding", "gzip")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+
+	if got := recorder.Header().Get("Content-Encoding"); got != "" {
+		t.Errorf("Content-Encoding = %q, want none", got)
+	}
+	if got := recorder.Header().Values("Vary"); len(got) != 0 {
+		t.Errorf("Vary = %q, want none from the middleware", got)
+	}
+	if got := recorder.Body.String(); got != "body { color: red }" {
+		t.Errorf("body = %q, want it unchanged", got)
 	}
 }
 
