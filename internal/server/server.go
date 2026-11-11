@@ -67,6 +67,9 @@ func (s *Server) Handler() http.Handler {
 	return middleware.Stack(mux, middleware.Options{
 		TrustedProxies: s.config.TrustedProxies,
 		Logger:         slog.Default(),
+		ServerError: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			pages.RenderError(w, r, http.StatusInternalServerError)
+		}),
 	})
 }
 

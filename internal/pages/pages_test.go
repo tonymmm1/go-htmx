@@ -3,89 +3,11 @@ package pages
 import (
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/tonymmm1/go-htmx/internal/site"
 )
-
-func TestExamplesPageIncludesWorkingHTMXPatterns(t *testing.T) {
-	recorder := performRequest(http.MethodGet, "/examples", "")
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("GET /examples returned %d, want %d", recorder.Code, http.StatusOK)
-	}
-
-	body := recorder.Body.String()
-	for _, expected := range []string{
-		`hx-get="/examples/time"`,
-		`hx-get="/examples/search"`,
-		`hx-post="/examples/counter"`,
-		`hx-trigger="input changed delay:300ms, search"`,
-	} {
-		if !strings.Contains(body, expected) {
-			t.Errorf("GET /examples response does not contain %q", expected)
-		}
-	}
-}
-
-func TestExampleFragments(t *testing.T) {
-	t.Run("server time", func(t *testing.T) {
-		recorder := performRequest(http.MethodGet, "/examples/time", "")
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("GET /examples/time returned %d, want %d", recorder.Code, http.StatusOK)
-		}
-		if !strings.Contains(recorder.Body.String(), "Server rendered this at") {
-			t.Fatalf("GET /examples/time did not return the expected fragment: %s", recorder.Body.String())
-		}
-	})
-
-	t.Run("live search", func(t *testing.T) {
-		recorder := performRequest(http.MethodGet, "/examples/search?q=htmx", "")
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("GET /examples/search returned %d, want %d", recorder.Code, http.StatusOK)
-		}
-
-		body := recorder.Body.String()
-		if !strings.Contains(body, "HTMX partial swaps") {
-			t.Errorf("search response did not include the matching topic: %s", body)
-		}
-		if strings.Contains(body, "Docker deployment") {
-			t.Errorf("search response included a non-matching topic: %s", body)
-		}
-	})
-
-	t.Run("counter post", func(t *testing.T) {
-		form := url.Values{"count": {"3"}, "action": {"increment"}}.Encode()
-		recorder := performRequest(http.MethodPost, "/examples/counter", form)
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("POST /examples/counter returned %d, want %d", recorder.Code, http.StatusOK)
-		}
-
-		body := recorder.Body.String()
-		if !strings.Contains(body, `value="4"`) || !strings.Contains(body, ">4</output>") {
-			t.Errorf("counter response did not contain the incremented value: %s", body)
-		}
-	})
-
-	t.Run("counter clamps submitted values", func(t *testing.T) {
-		form := url.Values{"count": {"999"}, "action": {"increment"}}.Encode()
-		recorder := performRequest(http.MethodPost, "/examples/counter", form)
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("POST /examples/counter returned %d, want %d", recorder.Code, http.StatusOK)
-		}
-		if !strings.Contains(recorder.Body.String(), `value="10"`) {
-			t.Errorf("counter response did not clamp the value: %s", recorder.Body.String())
-		}
-	})
-}
-
-func TestExampleCounterRejectsInvalidInput(t *testing.T) {
-	form := url.Values{"count": {"not-a-number"}, "action": {"increment"}}.Encode()
-	recorder := performRequest(http.MethodPost, "/examples/counter", form)
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("POST /examples/counter returned %d, want %d", recorder.Code, http.StatusBadRequest)
-	}
-}
 
 func TestStandardLibraryRouting(t *testing.T) {
 	tests := []struct {
@@ -108,6 +30,61 @@ func TestStandardLibraryRouting(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRobotsSitemapAndFavicon(t *testing.T) {
+	robots := performRequest(http.MethodGet, "/robots.txt", "")
+	if robots.Code != http.StatusOK || !strings.HasPrefix(robots.Body.String(), "User-agent: *\n") {
+		t.Errorf("GET /robots.txt returned %d %q", robots.Code, robots.Body.String())
+	}
+	if strings.Contains(robots.Body.String(), "Sitemap:") {
+		t.Error("robots.txt advertises a sitemap although site.URL is empty")
+	}
+	if code := performRequest(http.MethodGet, "/sitemap.xml", "").Code; code != http.StatusNotFound {
+		t.Errorf("GET /sitemap.xml without site.URL returned %d, want 404", code)
+	}
+
+	favicon := performRequest(http.MethodGet, "/favicon.ico", "")
+	if location := favicon.Header().Get("Location"); favicon.Code != http.StatusFound || !strings.HasPrefix(location, "/static/img/favicon.svg?v=") {
+		t.Errorf("GET /favicon.ico returned %d, Location %q", favicon.Code, location)
+	}
+
+	setSiteURL(t, "https://example.com")
+
+	if body := performRequest(http.MethodGet, "/robots.txt", "").Body.String(); !strings.Contains(body, "Sitemap: https://example.com/sitemap.xml\n") {
+		t.Errorf("robots.txt does not point at the sitemap: %q", body)
+	}
+	sitemap := performRequest(http.MethodGet, "/sitemap.xml", "")
+	if sitemap.Code != http.StatusOK || !strings.HasPrefix(sitemap.Header().Get("Content-Type"), "application/xml") {
+		t.Fatalf("GET /sitemap.xml returned %d %q", sitemap.Code, sitemap.Header().Get("Content-Type"))
+	}
+	for _, expected := range []string{
+		`<?xml version="1.0" encoding="UTF-8"?>`,
+		`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`,
+		"<url><loc>https://example.com/</loc></url>",
+		"<url><loc>https://example.com/about</loc></url>",
+	} {
+		if !strings.Contains(sitemap.Body.String(), expected) {
+			t.Errorf("sitemap does not contain %q: %s", expected, sitemap.Body.String())
+		}
+	}
+}
+
+// Every page in the sitemap must be served, or crawlers are sent to 404s.
+func TestSitemapPathsAreRouted(t *testing.T) {
+	for _, path := range sitemapPaths {
+		if code := performRequest(http.MethodGet, path, "").Code; code != http.StatusOK {
+			t.Errorf("GET %s returned %d, want %d", path, code, http.StatusOK)
+		}
+	}
+}
+
+// setSiteURL sets site.URL for the rest of the test.
+func setSiteURL(t *testing.T, url string) {
+	t.Helper()
+	previous := site.URL
+	site.URL = url
+	t.Cleanup(func() { site.URL = previous })
 }
 
 func performRequest(method, target, form string) *httptest.ResponseRecorder {

@@ -94,7 +94,8 @@ func (h *Handler) HandleExampleTime(w http.ResponseWriter, r *http.Request) {
 
 `templates/pages/examples.templ` and `templates/components/examples.templ` show the matching markup.
 
-**Rename the site:** change `SiteName` in `templates/layouts/meta.go`.
+**Make it your site:** run `make strip-examples` to remove the demo pages and the template's own docs,
+then set the name, production URL, footer and other per-site values in `internal/site/site.go`.
 
 **Change themes or add CSS:** edit `styles/input.css`.
 

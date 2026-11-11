@@ -25,6 +25,7 @@ dependencies unless asked. There is no Node.js or npm: Tailwind runs as a standa
 | Build CSS | `make css` (downloads the Tailwind standalone CLI + daisyUI into `.tools/` first) |
 | Dev server with live reload | `make dev` → http://localhost:7331 (app itself on `PORT`, default 8080) |
 | New page / component | `make new-page <name>` / `make new-component <name>` |
+| Remove the demo pages and template docs (once, in a new site) | `make strip-examples` |
 
 templ is a Go tool pinned in `go.mod`: run it as `go tool templ`, never `templ` or `go install`.
 
@@ -32,10 +33,12 @@ templ is a Go tool pinned in `go.mod`: run it as `go tool templ`, never `templ` 
 
 - `cmd/server/main.go`: entry point, logging, `-healthcheck` flag
 - `internal/config`: env config (`PORT`, `APP_ENV`, `TRUSTED_PROXIES`)
+- `internal/site/site.go`: per-site values (name, canonical URL, language, footer, rate limit, extra CSP sources)
 - `internal/server`: mux, `/healthz`, timeouts, graceful shutdown
 - `internal/middleware`: logging, recovery, security headers/CSP, CSRF, rate limit, gzip
 - `internal/contentcoding`: `Accept-Encoding` negotiation shared by the gzip middleware and `static`
-- `internal/pages`: route registration and handlers, `Render`/`RenderPage` helpers
+- `internal/pages`: route registration and handlers, `Render`/`RenderPage`/`RenderError` helpers,
+  `/robots.txt`, `/sitemap.xml`
 - `templates/layouts`, `templates/pages`, `templates/components`: `.templ` files
 - `static/`: Go package that embeds and serves assets; `static/js/app.js` is the only app JavaScript
 - `styles/input.css`: Tailwind + daisyUI configuration (no `tailwind.config.js`)
@@ -47,16 +50,20 @@ templ is a Go tool pinned in `go.mod`: run it as `go tool templ`, never `templ` 
 2. **Strict CSP** (`script-src 'self'; style-src 'self'`). Do not add inline `<script>` blocks, `style="…"`
    attributes, `<style>` tags, `hx-on:*`, `hx-vals="js:…"`, hx-trigger filters (`[…]`), or `javascript:` URLs.
    Put behaviour in `static/js/app.js` (event listeners on `document`, so they survive hx-boost swaps) and
-   styles in `styles/input.css`. CDN assets are not allowed either; vendor files into `static/`.
+   styles in `styles/input.css`. CDN assets are not allowed either; vendor files into `static/`. If the site
+   needs a third-party origin (analytics, an embed, an image host), add it to `CSP` in
+   `internal/site/site.go`, never to the baseline in `internal/middleware`.
 3. **Assets must be embedded.** Reference them with `static.Path("dir/file")` in templates, never a literal
    `/static/...` URL. A new directory under `static/` must be added to the `//go:embed` line in
    `static/static.go`, or it will 404 in production. `TestLayoutHead` fails if a layout asset lacks its hash.
 4. **Rendering:** full pages use `RenderPage(w, r, status, pagetemplates.X())`; htmx fragments use
-   `Render(w, r, status, components.Y(...))`. Don't write HTML to `w` directly.
+   `Render(w, r, status, components.Y(...))`; a failure the visitor should see as a page uses
+   `RenderError(w, r, status)`. Don't write HTML to `w` directly.
 5. **Pages** wrap their content in `@layouts.Layout(layouts.Meta{Title, Description, Path})`. Add a nav link in
    `templates/layouts/layout.templ` if the page should appear in the header.
 6. **Routes** go in `RegisterPageRoutes` in `internal/pages/pages.go`, above the `// scaffold:routes` marker.
-   Keep the marker and keep `GET /` (the 404 catch-all) last.
+   Keep the marker and keep `GET /` (the 404 catch-all) last. Pages that search engines should index also
+   go in `sitemapPaths` in the same file, above `// scaffold:sitemap` (`make new-page` does both).
 7. **Tailwind class names must appear literally** in `.templ`/`.go`/`app.js` files so the scanner finds them.
    Don't build class names by string concatenation (`"btn-" + size`); map to full class strings instead.
 8. **Styling:** use daisyUI 5 components and semantic colours (`btn-primary`, `bg-base-200`,
@@ -65,6 +72,8 @@ templ is a Go tool pinned in `go.mod`: run it as `go tool templ`, never `templ` 
 9. **State-changing requests** use POST/PUT/PATCH/DELETE. Cross-origin unsafe requests are rejected by
    `http.CrossOriginProtection`; don't disable it.
 10. **Module path** appears in `.go` and `.templ` imports. Don't hand-edit it; `make setup MODULE=…` rewrites it.
+11. **Per-site values** (site name, canonical URL, language, footer, theme colours, rate limit, extra CSP
+    sources) live in `internal/site/site.go`. Don't hardcode them in templates or middleware.
 
 ## Patterns
 
@@ -89,8 +98,9 @@ func (h *Handler) HandleContact(w http.ResponseWriter, r *http.Request) {
 Fragment: return only the swapped element with `Render(w, r, http.StatusOK, components.X(...))`. htmx does not
 swap 4xx/5xx responses; app.js shows an error toast instead. To show inline validation errors, re-render the
 form with its error markup and status 200. Full examples (fragment, validated form, SSE) are in
-[docs/agents/recipes.md](docs/agents/recipes.md); the live ones are `HandleExampleCounter` and
-`templates/components/examples.templ`.
+[docs/agents/recipes.md](docs/agents/recipes.md).
+
+Live examples, until `make strip-examples` removes them: `internal/pages/examples.go` and `templates/components/examples.templ`.
 
 ## Testing
 
@@ -101,7 +111,8 @@ keep them passing with `make test-race`.
 ## Definition of done
 
 1. `.templ` changes regenerated (`make generate`) and formatted (`make fmt`).
-2. New pages and endpoints have tests; new pages are added to the list in `TestPagesAreCSPCompatible`.
+2. New pages and endpoints have tests; new pages are in `sitemapPaths` (which `TestPagesAreCSPCompatible`
+   checks), unless they should not be indexed.
 3. User-facing changes to config, commands or structure are reflected in README.md, and in this file or
    `docs/agents/` if they change a rule or recipe.
 4. `make check` passes (format check, vet, staticcheck, docs references, race tests, generator smoke test,
