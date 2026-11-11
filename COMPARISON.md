@@ -8,7 +8,7 @@ common alternatives, and where it falls short.
 | | go-htmx | Next.js / Nuxt |
 |---|---|---|
 | Rendering | Server-rendered HTML; htmx swaps HTML fragments | SSR/SSG plus client-side hydration |
-| Client JavaScript | htmx 2.0.10 + a small `app.js` (~16 KB with Brotli together) | Framework runtime plus your components |
+| Client JavaScript | htmx 2.0.11 + a small `app.js` (~16 KB with Brotli together) | Framework runtime plus your components |
 | Routing | Explicit `net/http` routes; `make new-page` adds them | File-based |
 | Type safety | Go + templ, checked at compile time | TypeScript |
 | Dev reload | templ watcher (browser reload, server restart) + Tailwind watch | Vite / Fast Refresh with state preservation |

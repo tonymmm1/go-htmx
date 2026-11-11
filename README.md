@@ -12,7 +12,7 @@ embedded, and needs no Node.js: CSS is built with the Tailwind standalone CLI.
 ## Why it's lightweight
 
 - **The whole home page is about 30 KB with Brotli** (34 KB gzipped), including the stylesheet (~12 KB),
-  htmx (~15 KB) and the app script (~1 KB). No client framework and no CDN: htmx 2.0.10 is vendored in
+  htmx (~15 KB) and the app script (~1 KB). No client framework and no CDN: htmx 2.0.11 is vendored in
   `static/js/`.
 - **A ~9 MB static binary** (`CGO_ENABLED=0`, stripped) contains the server, the compiled templates and
   every static asset.
@@ -93,7 +93,7 @@ static/
   static.go               Embeds and serves assets (go:embed, hashing, Brotli/gzip, ETags)
   css/                    Tailwind output (generated, gitignored)
   js/app.js               Theme toggle and htmx error toasts
-  js/htmx.min.js          Vendored htmx 2.0.10
+  js/htmx.min.js          Vendored htmx 2.0.11
   img/favicon.svg
 styles/input.css          Tailwind entry point (daisyUI themes, custom CSS)
 .tools/                   Tailwind standalone CLI + daisyUI bundle (downloaded, gitignored)
