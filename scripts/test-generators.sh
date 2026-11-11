@@ -35,12 +35,16 @@ while IFS= read -r -d '' file; do
 done < <(find "$TEST_ROOT/cmd" "$TEST_ROOT/internal" "$TEST_ROOT/static" "$TEST_ROOT/templates" -type f \( -name '*.go' -o -name '*.templ' \) -print0)
 
 cd "$TEST_ROOT"
+# As setup.sh does: a new module path can change how imports sort.
+gofmt -w cmd internal static templates
+go tool templ fmt templates
 bash scripts/new-page.sh contact-us
 bash scripts/new-component.sh feature-card
 
 grep -Fq 'example.com/scaffold/site/templates/layouts' templates/pages/contact-us.templ
 grep -Fq 'mux.HandleFunc("GET /contact-us", h.HandleContactUs)' internal/pages/pages.go
 grep -Fq 'func (h *Handler) HandleContactUs' internal/pages/pages.go
+grep -Fxq '	"/contact-us",' internal/pages/pages.go
 grep -Fq 'RenderPage(w, r, http.StatusOK, pagetemplates.ContactUs())' internal/pages/pages.go
 grep -Fq '@layouts.Layout(layouts.Meta{' templates/pages/contact-us.templ
 grep -Fq 'Title:       "Contact Us",' templates/pages/contact-us.templ
@@ -72,6 +76,20 @@ func TestGeneratedPage(t *testing.T) {
 EOF
 
 go tool templ generate
+go vet ./...
+go test ./...
+
+# A site with the demo content stripped must still build and pass its tests,
+# and stripping twice must be harmless.
+bash scripts/strip-examples.sh
+bash scripts/strip-examples.sh
+if grep -rnE --include='*.go' --include='*.templ' --exclude='*_templ.go' '/examples|HandleExample|registerExampleRoutes' internal templates; then
+    echo "strip-examples.sh left references to the examples behind" >&2
+    exit 1
+fi
+go tool templ generate
+gofmt -l cmd internal static templates | grep . && { echo "strip-examples.sh left unformatted Go files" >&2; exit 1; }
+go tool templ fmt -fail templates
 go vet ./...
 go test ./...
 

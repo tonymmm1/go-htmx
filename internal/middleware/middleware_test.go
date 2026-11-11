@@ -88,6 +88,63 @@ func TestStackRecoversFromPanicsAndLogs500(t *testing.T) {
 	findLog(t, &logs, "panic serving request")
 }
 
+func TestStackServesErrorPageAfterPanic(t *testing.T) {
+	panics := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("test panic") })
+	serve := func(errorPage http.HandlerFunc) *httptest.ResponseRecorder {
+		handler := Stack(panics, Options{Logger: slog.New(slog.DiscardHandler), ServerError: errorPage})
+		request := httptest.NewRequest(http.MethodGet, "http://example.com/boom", nil)
+		request.RemoteAddr = "192.0.2.1:1234"
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder
+	}
+
+	styled := serve(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("<h1>styled</h1>"))
+	})
+	if styled.Code != http.StatusInternalServerError || styled.Body.String() != "<h1>styled</h1>" {
+		t.Errorf("error page: got %d %q", styled.Code, styled.Body.String())
+	}
+
+	// A broken error page must not turn the 500 into an aborted connection.
+	broken := serve(func(http.ResponseWriter, *http.Request) { panic("layout is broken too") })
+	if broken.Code != http.StatusInternalServerError || !strings.Contains(broken.Body.String(), "Internal Server Error") {
+		t.Errorf("panicking error page: got %d %q", broken.Code, broken.Body.String())
+	}
+}
+
+func TestBuildCSP(t *testing.T) {
+	const baseline = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
+		"connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; " +
+		"frame-ancestors 'none'"
+	if got := buildCSP(nil); got != baseline {
+		t.Errorf("buildCSP(nil) = %q, want %q", got, baseline)
+	}
+
+	got := buildCSP(map[string][]string{
+		"script-src":      {"https://plausible.io"},
+		"img-src":         {"https://img.example", "https://cdn.example"},
+		"frame-ancestors": {"https://partner.example"},
+		"frame-src":       {"https://www.youtube-nocookie.com"},
+		"media-src":       nil,
+	})
+	for _, directive := range []string{
+		"; script-src 'self' https://plausible.io; ",
+		"; img-src 'self' data: https://img.example https://cdn.example; ",
+		"; frame-ancestors https://partner.example; ", // replaces 'none', which must stand alone
+		"; frame-src 'self' https://www.youtube-nocookie.com",
+		"; style-src 'self'; ",
+	} {
+		if !strings.Contains(got, directive) {
+			t.Errorf("buildCSP = %q, missing %q", got, directive)
+		}
+	}
+	if strings.Contains(got, "media-src") {
+		t.Errorf("buildCSP = %q, want no directive without sources", got)
+	}
+}
+
 func TestStackAbortsPanicsAfterHeaders(t *testing.T) {
 	var logs bytes.Buffer
 	handler := Stack(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -162,7 +219,7 @@ func TestCrossOriginProtection(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request := httptest.NewRequest(test.method, "http://example.com/examples/counter", nil)
+			request := httptest.NewRequest(test.method, "http://example.com/items", nil)
 			request.RemoteAddr = "192.0.2.1:1234"
 			for key, value := range test.header {
 				request.Header.Set(key, value)

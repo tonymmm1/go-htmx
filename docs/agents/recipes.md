@@ -7,10 +7,11 @@ repo root, and `pagetemplates`/`components` are the package names of `templates/
 ## Add a page
 
 1. `make new-page pricing` creates `pricing.templ` in `templates/pages/`, adds `GET /pricing` above
-   `// scaffold:routes`, and adds `HandlePricing` to `internal/pages/pages.go`. To do it by hand, copy
-   `templates/pages/about.templ` and `HandleAbout`.
-2. Fill in `layouts.Meta`: a `Title` (rendered as "Pricing · Go-HTMX"), a one-sentence `Description`, and
-   `Path` matching the route.
+   `// scaffold:routes`, adds `"/pricing"` to `sitemapPaths`, and adds `HandlePricing` to
+   `internal/pages/pages.go`. To do it by hand, copy `templates/pages/about.templ` and `HandleAbout`.
+2. Fill in `layouts.Meta`: a `Title` (rendered as "Pricing · Go-HTMX", using the site name), a one-sentence
+   `Description`, and `Path` matching the route. `Description` also feeds `og:description`; set `Image` to
+   an asset name such as `img/pricing.png` for a page-specific link-preview image.
 3. To show it in the header, add `@navLink(meta.Path, "/pricing", "Pricing")` to the `<ul>` in
    `templates/layouts/layout.templ`.
 4. Add a test in `internal/pages/pages_test.go`:
@@ -27,8 +28,29 @@ repo root, and `pagetemplates`/`components` are the package names of `templates/
    }
    ```
 
-`TestPagesAreCSPCompatible` in `internal/pages/render_test.go` checks a fixed list of pages for inline
-scripts and styles. Add new pages to its list.
+`TestPagesAreCSPCompatible` in `internal/pages/render_test.go` checks every page in `sitemapPaths` for
+inline scripts and styles, and `/sitemap.xml` lists them. A page that should not be indexed (a thank-you
+page, an account page) is left out of `sitemapPaths`; check it for inline scripts and styles yourself.
+
+## Configure the site
+
+`internal/site/site.go` holds everything that differs between sites built from this template:
+
+- `Name`, `Lang`, `Footer`, `ThemeColorLight`/`ThemeColorDark`: used by `templates/layouts/layout.templ`.
+- `URL`: the production origin, e.g. `https://example.com`, no trailing slash. While it is empty there are
+  no canonical links, no `og:url`/`og:image`, `/sitemap.xml` returns 404 and `/robots.txt` names no sitemap.
+- `Image`: default link-preview image as an asset name under `static/`.
+- `RateLimit`, `RateWindow`: per-IP request budget (htmx fragment requests count).
+- `CSP`: extra sources per directive, e.g. `"script-src": {"https://plausible.io"}`. Directives outside
+  the baseline, such as `frame-src`, start from `'self'`.
+
+`/robots.txt` allows everything; edit `HandleRobots` in `internal/pages/seo.go` to disallow paths.
+
+## Show an error page
+
+For a failure the visitor should see as a page, call `RenderError(w, r, http.StatusInternalServerError)`
+(any 4xx/5xx status) and return. It renders `templates/pages/error.templ`; panics get the same page from
+the recovery middleware. Log the cause yourself; the page never shows it.
 
 ## Add an htmx fragment endpoint
 
@@ -60,7 +82,7 @@ func (h *Handler) HandleStats(w http.ResponseWriter, r *http.Request) {
 - Use `Render` for fragments and `RenderPage` only for components wrapped in `layouts.Layout`.
 - Put `aria-live="polite"` on a wrapper that stays in the page, not on the element being swapped.
 - Give buttons inside swapped content stable `id`s, so htmx keeps keyboard focus across `outerHTML` swaps.
-- Set `Cache-Control: no-store` on fragments that must never be cached (see `HandleExampleTime`).
+- Set `Cache-Control: no-store` on fragments that must never be cached.
 
 ## Add a form with inline validation
 

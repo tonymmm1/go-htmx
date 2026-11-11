@@ -51,10 +51,12 @@ if grep -Fq "mux.HandleFunc(\"GET /${PAGE_SLUG}\"" "$HANDLERS_FILE"; then
     exit 1
 fi
 
-if ! grep -Fq "// scaffold:routes" "$HANDLERS_FILE"; then
-    echo "Error: route marker not found in $HANDLERS_FILE."
-    exit 1
-fi
+for marker in "// scaffold:routes" "// scaffold:sitemap"; do
+    if ! grep -Fq "$marker" "$HANDLERS_FILE"; then
+        echo "Error: marker '$marker' not found in $HANDLERS_FILE."
+        exit 1
+    fi
+done
 
 trap 'rm -f -- "$HANDLERS_TMP" "$TEMPLATE_TMP"' EXIT
 mkdir -p templates/pages
@@ -83,8 +85,9 @@ templ ${PAGE_COMPONENT}() {
 }
 EOF
 
-awk -v route="mux.HandleFunc(\"GET /${PAGE_SLUG}\", h.Handle${PAGE_COMPONENT})" '
+awk -v route="mux.HandleFunc(\"GET /${PAGE_SLUG}\", h.Handle${PAGE_COMPONENT})" -v path="\"/${PAGE_SLUG}\"," '
     /\/\/ scaffold:routes/ { print "\t" route }
+    /\/\/ scaffold:sitemap/ { print "\t" path }
     { print }
 ' "$HANDLERS_FILE" > "$HANDLERS_TMP"
 
@@ -101,5 +104,5 @@ gofmt -w "$HANDLERS_FILE"
 trap - EXIT
 
 echo "Created $TEMPLATE_FILE"
-echo "Added /${PAGE_SLUG} and Handle${PAGE_COMPONENT} to $HANDLERS_FILE"
+echo "Added /${PAGE_SLUG} (route, sitemap entry) and Handle${PAGE_COMPONENT} to $HANDLERS_FILE"
 echo "Run 'make generate' (or leave 'make dev' running) to generate the Go template."

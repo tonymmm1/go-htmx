@@ -102,7 +102,8 @@ make --no-print-directory deps
 ok "Go modules and CSS tools (Tailwind CLI, daisyUI) installed"
 
 step "Generating templ code and CSS..."
-make --no-print-directory generate css
+# A new module path can change how imports sort, so reformat before generating.
+make --no-print-directory fmt generate css
 ok "Templ code and CSS generated"
 
 step "Compiling..."

@@ -1,0 +1,21 @@
+# Weekly dependency update PRs. Not covered (Dependabot cannot see them):
+# the Tailwind CLI and daisyUI versions pinned in scripts/install-tools.sh,
+# the vendored static/js/htmx.min.js, the Go image tag (a build ARG in the
+# Dockerfile) and the tool versions in the Makefile.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

@@ -10,19 +10,23 @@ cmd/server/main.go          config.LoadConfig → slog setup → server.Run(ctx)
 internal/server/server.go   http.ServeMux:
                               GET /healthz        handleHealthz
                               GET /static/        static.Handler()
-                              pages.RegisterPageRoutes(...)
+                              pages.RegisterPageRoutes(...)   pages, /robots.txt, /sitemap.xml,
+                                                              /favicon.ico (redirect), 404 catch-all
                             wrapped by middleware.Stack(mux, middleware.Options{...})
 ```
 
 `middleware.Stack` order, outermost first (`internal/middleware/middleware.go`):
 
 1. `requestLogger`: one `slog` line per request (method, path, status, bytes, `duration_ms`, client IP).
-2. `recoverPanics`: panic → logged + 500. If headers were already sent, it aborts the connection.
+2. `recoverPanics`: panic → logged + 500, rendered by `Options.ServerError` (the server passes
+   `pages.RenderError`; plain text if that is nil or panics too). If headers were already sent, it aborts
+   the connection.
 3. `securityHeaders`: CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, COOP,
-   `Permissions-Policy`. No HSTS; set that on the TLS-terminating proxy.
+   `Permissions-Policy`. No HSTS; set that on the TLS-terminating proxy. The CSP is the same-origin
+   baseline in `internal/middleware/middleware.go` plus the sources in `site.CSP`.
 4. `blockDangerousMethods`: 405 for CONNECT and TRACE.
-5. Rate limiter: 100 requests/minute per client IP (IPv6 grouped by /64). `/static/` and `/healthz` are
-   exempt. The client IP comes from `X-Forwarded-For` only when the TCP peer is in `TRUSTED_PROXIES`.
+5. Rate limiter: `site.RateLimit` requests per `site.RateWindow` (100/minute) per client IP (IPv6 grouped
+   by /64). `/static/` and `/healthz` are exempt. The client IP comes from `X-Forwarded-For` only when the TCP peer is in `TRUSTED_PROXIES`.
 6. `http.NewCrossOriginProtection()`: rejects cross-site POST/PUT/PATCH/DELETE (CSRF).
 7. `gzipResponses`: compresses text-like responses unless `Content-Encoding` or an `ETag` is already
    set (precompressed static assets, and any handler managing its own representations, pass through);
@@ -40,6 +44,8 @@ IdleTimeout 120s, 5s graceful shutdown. HTTP/1.1 and cleartext HTTP/2 (h2c).
   `Vary: HX-Request, HX-Boosted, HX-History-Restore-Request`. A plain htmx request (not boosted, not a
   history restore) gets the page content only; `Layout` checks `layouts.WithContentOnly(ctx)` and skips
   the document shell. Normal and boosted navigations get the full document.
+- `RenderError(w, r, status)` renders the styled error page (`templates/pages/error.templ`) with
+  `Cache-Control: no-store`.
 - `IsHTMX(r)` and `IsBoosted(r)` read the `HX-Request` and `HX-Boosted` headers.
 
 The layout (`templates/layouts/layout.templ`) sets `hx-boost="true"` on `<body>`, so links and forms
@@ -76,6 +82,13 @@ everything else is an event listener on `document` (so it survives hx-boost body
 - Dotfiles, `.go` files and directories are never served.
 - `static/css/` is Tailwind output (gitignored apart from `.gitkeep`). `make css` builds it, and it must
   exist before `go build` for production, because it is embedded at compile time.
+
+## Site values (`internal/site/site.go`)
+
+Compile-time values that differ per site: name, canonical `URL`, language, footer, theme colours, default
+link-preview image, rate limit and extra CSP sources. The layout, `layouts.Meta` (`URL()`, `ImageURL()`),
+the middleware and the robots/sitemap handlers read them. Per-site edits belong here so that merging
+template updates into a site rarely conflicts.
 
 ## Configuration (`internal/config/config.go`)
 

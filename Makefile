@@ -5,10 +5,12 @@ ENV_PORT   := $(shell sed -n 's/^PORT=//p' .env 2>/dev/null | tr -d "\"' ")
 PORT       ?= $(or $(ENV_PORT),8080)
 PROXY_PORT ?= 7331
 PROXY_BIND ?= 127.0.0.1
-IMAGE      ?= gohtmx
-CONTAINER  ?= gohtmx-dev
+# Docker names follow the module name, so each site gets its own.
+APP_NAME   := $(notdir $(shell awk '$$1 == "module" { print $$2; exit }' go.mod))
+IMAGE      ?= $(APP_NAME)
+CONTAINER  ?= $(APP_NAME)-dev
 
-STATICCHECK_VERSION ?= v0.8.1
+STATICCHECK_VERSION ?= v0.8.2
 GOVULNCHECK_VERSION ?= v1.8.0
 
 GO_BUILD := CGO_ENABLED=0 go build -trimpath -ldflags="-s -w"
@@ -20,7 +22,7 @@ GO_DIRS  := cmd internal static templates
 .PHONY: all help setup tools deps generate css dev watch-templ watch-css \
 	build run test test-race test-generators check-docs fmt fmt-check vet lint check audit \
 	docker-build docker-up docker-down compose-up compose-dev compose-down \
-	clean clean-all new-page new-component
+	clean clean-all new-page new-component strip-examples
 
 all: dev
 
@@ -162,6 +164,10 @@ new-page:
 new-component:
 	@bash scripts/new-component.sh $(filter-out $@,$(MAKECMDGOALS))
 
+# Remove the demo pages and the template's own docs from a new site
+strip-examples:
+	@bash scripts/strip-examples.sh
+
 # Lets generator arguments (make new-page about-us) pass through as goals
 %:
 	@:
@@ -180,6 +186,7 @@ help:
 	@echo "Generators:"
 	@echo "  make new-page <name>      - Generate a new page"
 	@echo "  make new-component <name> - Generate a new component"
+	@echo "  make strip-examples       - Remove the demo pages and template docs (new sites)"
 	@echo ""
 	@echo "Quality:"
 	@echo "  make test                 - Run tests"

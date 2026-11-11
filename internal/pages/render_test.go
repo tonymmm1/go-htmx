@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/a-h/templ"
+	"github.com/tonymmm1/go-htmx/internal/site"
 )
 
 func TestNotFoundPage(t *testing.T) {
@@ -78,13 +80,6 @@ func TestPagesRenderContentOnlyForHTMXRequests(t *testing.T) {
 			t.Errorf("htmx 404 should be the content only: %s", body)
 		}
 	})
-
-	t.Run("fragments do not vary", func(t *testing.T) {
-		recorder := performRequestWithHeaders(http.MethodGet, "/examples/search?q=go", "", map[string]string{"HX-Request": "true"})
-		if vary := recorder.Header().Get("Vary"); vary != "" {
-			t.Errorf("fragment Vary = %q, want none", vary)
-		}
-	})
 }
 
 var staticURL = regexp.MustCompile(`(?:src|href)="(/static/[^"]*)"`)
@@ -129,12 +124,68 @@ func TestLayoutHead(t *testing.T) {
 	}
 }
 
+func TestLayoutLinkPreviewTags(t *testing.T) {
+	body := performRequest(http.MethodGet, "/about", "").Body.String()
+	for _, expected := range []string{
+		`<meta property="og:title" content="About · Go-HTMX">`,
+		`<meta property="og:description" content="What is included in the Go-HTMX starter template.">`,
+		`<meta property="og:site_name" content="Go-HTMX">`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("GET /about does not contain %q", expected)
+		}
+	}
+	for _, unexpected := range []string{`rel="canonical"`, "og:url", "og:image"} {
+		if strings.Contains(body, unexpected) {
+			t.Errorf("GET /about contains %q although site.URL is empty", unexpected)
+		}
+	}
+
+	setSiteURL(t, "https://example.com")
+	previous := site.Image
+	site.Image = "img/favicon.svg"
+	t.Cleanup(func() { site.Image = previous })
+
+	body = performRequest(http.MethodGet, "/about", "").Body.String()
+	for _, expected := range []string{
+		`<link rel="canonical" href="https://example.com/about">`,
+		`<meta property="og:url" content="https://example.com/about">`,
+		`<meta property="og:image" content="https://example.com/static/img/favicon.svg?v=`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("GET /about does not contain %q", expected)
+		}
+	}
+	// Error pages have no canonical URL.
+	if missing := performRequest(http.MethodGet, "/missing", "").Body.String(); strings.Contains(missing, `rel="canonical"`) {
+		t.Error("404 page has a canonical link")
+	}
+}
+
+func TestRenderError(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	RenderError(recorder, httptest.NewRequest(http.MethodGet, "/", nil), http.StatusInternalServerError)
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+	}
+	body := recorder.Body.String()
+	for _, expected := range []string{"<title>Something went wrong · Go-HTMX</title>", ">500</p>", `href="/"`} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("error page does not contain %q", expected)
+		}
+	}
+	if got := recorder.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want no-store", got)
+	}
+}
+
 // The production CSP is script-src 'self'; style-src 'self', so rendered pages
 // must not rely on inline scripts, inline styles, or hx-on handlers.
 func TestPagesAreCSPCompatible(t *testing.T) {
 	scriptTag := regexp.MustCompile(`<script\b[^>]*>`)
 
-	for _, target := range []string{"/", "/about", "/examples", "/missing"} {
+	for _, target := range append(slices.Clone(sitemapPaths), "/missing") {
 		t.Run(target, func(t *testing.T) {
 			body := performRequest(http.MethodGet, target, "").Body.String()
 			for _, tag := range scriptTag.FindAllString(body, -1) {

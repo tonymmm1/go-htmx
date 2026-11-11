@@ -31,7 +31,9 @@ embedded, and needs no Node.js: CSS is built with the Tailwind standalone CLI.
 - Page rendering that serves full documents to normal and boosted navigation and just the content to
   plain htmx requests
 - `hx-boost` navigation with a progress bar, a light/dark theme toggle, error toasts for failed htmx
-  requests and a 404 page
+  requests, and styled 404 and 500 pages
+- `/robots.txt`, `/sitemap.xml`, canonical links and Open Graph tags
+- One file of per-site settings (`internal/site/site.go`) and `make strip-examples` to remove the demo
 - Working htmx examples at `/examples` (fragment GET, debounced search, form POST)
 - Page and component generators, hot reload via templ's watcher, Docker and GitHub Actions CI
 
@@ -73,16 +75,19 @@ there is nothing to install globally: run it as `go tool templ`.
 cmd/server/main.go        Entry point: config, logger, signals, -healthcheck flag
 internal/
   config/                 PORT, APP_ENV, TRUSTED_PROXIES (+ optional .env)
+  site/site.go            Per-site values: name, URL, language, footer, rate limit, extra CSP sources
   server/                 Routes, middleware stack, timeouts, graceful shutdown, /healthz
   middleware/             Logging, recovery, security headers, rate limit, gzip
   contentcoding/          Accept-Encoding negotiation (shared by gzip middleware and static)
   pages/
-    pages.go              Routes and handlers
-    render.go             RenderPage, Render, IsHTMX, IsBoosted
+    pages.go              Routes, sitemap paths and page handlers
+    examples.go           The /examples demo (removed by make strip-examples)
+    seo.go                /robots.txt, /sitemap.xml, /favicon.ico
+    render.go             RenderPage, Render, RenderError, IsHTMX, IsBoosted
 templates/
   layouts/layout.templ    Document shell, nav, theme toggle, toasts
-  layouts/meta.go         layouts.Meta and SiteName
-  pages/*.templ           Pages (index, about, examples, not-found)
+  layouts/meta.go         layouts.Meta (title, description, canonical URL, preview image)
+  pages/*.templ           Pages (index, about, examples, not-found, error)
   components/*.templ      Reusable components and htmx fragments
 static/
   static.go               Embeds and serves assets (go:embed, hashing, Brotli/gzip, ETags)
@@ -92,7 +97,8 @@ static/
   img/favicon.svg
 styles/input.css          Tailwind entry point (daisyUI themes, custom CSS)
 .tools/                   Tailwind standalone CLI + daisyUI bundle (downloaded, gitignored)
-scripts/                  install-tools.sh, new-page.sh, new-component.sh, test-generators.sh, check-docs.sh
+scripts/                  install-tools.sh, new-page.sh, new-component.sh, strip-examples.sh,
+                          test-generators.sh, check-docs.sh
 setup.sh                  Project setup and module rename
 create-go-htmx.sh         Scaffolder: clone, setup, git init
 docs/ui.md                UI library guide (daisyUI, shadcn-style alternatives)
@@ -108,8 +114,8 @@ AGENTS.md                 Instructions for coding agents (CLAUDE.md imports it)
 make new-page contact-us
 ```
 
-This creates `templates/pages/contact-us.templ` and adds `GET /contact-us` and `HandleContactUs` to
-`internal/pages/pages.go`. Add a link to the nav in `templates/layouts/layout.templ` yourself if you want
+This creates `templates/pages/contact-us.templ` and adds `GET /contact-us`, a sitemap entry and
+`HandleContactUs` to `internal/pages/pages.go`. Add a link to the nav in `templates/layouts/layout.templ` yourself if you want
 one.
 
 By hand, a page is a templ component wrapped in `layouts.Layout`:
@@ -126,8 +132,10 @@ templ About() {
 }
 ```
 
-`Title` renders as `About · Go-HTMX` (leave it empty for just the site name, set in `layouts.SiteName`),
-`Description` becomes `<meta name="description">`, and `Path` marks the matching nav link as current.
+`Title` renders as `About · Go-HTMX` (leave it empty for just the site name, `Name` in
+`internal/site/site.go`), `Description` becomes `<meta name="description">` and `og:description`, and
+`Path` marks the matching nav link as current and forms the canonical URL. `Image` (optional) is the
+link-preview image.
 
 The handler and route:
 
@@ -223,6 +231,27 @@ and checksums there.
 [docs/ui.md](docs/ui.md) covers daisyUI conventions and how to switch to a shadcn/ui-style kit
 ([Basecoat](https://github.com/hunvreus/basecoat) or [shadcn-templ](https://templui.io/)) within the CSP.
 
+## Starting a site from the template
+
+After `make setup`, two steps turn the template into your site:
+
+1. `make strip-examples` removes the `/examples` demo (handlers, templates, tests, links) and the
+   template's own `README.md`, `QUICKSTART.md` and `COMPARISON.md`, leaving a short README for your project.
+2. Edit `internal/site/site.go`:
+
+| Value | Purpose |
+|-------|---------|
+| `Name`, `Lang`, `Footer` | Brand in the nav and page titles, `<html lang>`, footer text |
+| `URL` | Production origin (`https://example.com`). Enables canonical links, `og:url`, `og:image` and `/sitemap.xml`; while empty they are left out |
+| `Image` | Default link-preview image, an asset name under `static/` |
+| `ThemeColorLight`, `ThemeColorDark` | Browser UI colour per colour scheme |
+| `RateLimit`, `RateWindow` | Requests per client IP per window (default 100 per minute) |
+| `CSP` | Extra Content Security Policy sources per directive, for analytics, embeds or an image host |
+
+`/sitemap.xml` lists `sitemapPaths` in `internal/pages/pages.go` (`make new-page` adds to it), and
+`/robots.txt` allows all crawlers and points at the sitemap. Docker image and container names follow the
+module name.
+
 ## Configuration
 
 Settings come from environment variables. `.env` (created from `.env.example` by setup) is loaded if
@@ -244,14 +273,15 @@ The middleware stack (`internal/middleware`), outermost first:
 
 1. **Request logging**: one `slog` line per request with method, path, status, bytes, `duration_ms` and
    client IP. `/healthz` is logged at debug level.
-2. **Panic recovery**: logs the stack and returns 500, or aborts the connection if headers were already sent.
+2. **Panic recovery**: logs the stack and returns the styled 500 page, or aborts the connection if headers
+   were already sent.
 3. **Security headers**: CSP (above), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
    `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`. HSTS is not set; configure it on
    the TLS-terminating proxy.
 4. **`CONNECT` and `TRACE` are rejected** with 405.
 5. **Rate limiting**: 100 requests per minute per client IP (IPv6 grouped by /64), with `X-RateLimit-*`
-   and `Retry-After` headers. `/static/` and `/healthz` are exempt. Change `requestLimit` and `rateWindow`
-   in `internal/middleware/middleware.go`. Behind a proxy, set `TRUSTED_PROXIES` or every visitor shares
+   and `Retry-After` headers. `/static/` and `/healthz` are exempt. Change `RateLimit` and `RateWindow`
+   in `internal/site/site.go`. Behind a proxy, set `TRUSTED_PROXIES` or every visitor shares
    the proxy's limit.
 6. **CSRF protection**: `http.CrossOriginProtection` rejects cross-origin `POST`/`PUT`/`PATCH`/`DELETE`
    from browsers using `Sec-Fetch-Site` and `Origin`. No tokens needed.
@@ -312,8 +342,9 @@ Run `make` (or `make help`) for the list.
 | `build` / `run` | Build `./bin/server` (CSS, templ, static binary) / build and run it |
 | `generate` / `css` | `go tool templ generate` / minified Tailwind build |
 | `new-page <name>` / `new-component <name>` | Generators |
+| `strip-examples` | Remove the demo pages and the template's own docs from a new site |
 | `test` / `test-race` | `go test ./...` / with the race detector |
-| `test-generators` | Run both generators in a temp copy with a different module path, then vet and test |
+| `test-generators` | Run both generators and `strip-examples` in a temp copy with a different module path, then vet and test |
 | `check-docs` | Fail if `AGENTS.md`, `docs/ui.md` or `docs/agents/` reference missing files, links or make targets |
 | `fmt` / `fmt-check` | Format Go and templ files / fail if anything is unformatted |
 | `vet` / `lint` | `go vet` / `go vet` + staticcheck |
@@ -326,7 +357,9 @@ Run `make` (or `make help`) for the list.
 
 CI (`.github/workflows/ci.yml`) runs `go mod verify`, `fmt-check`, `lint`, `check-docs`, `test-race`,
 `test-generators`, `build` and `audit`, then builds the Docker image and smoke-tests it: `/healthz`, the
-home page, the embedded stylesheet, and `server -healthcheck`.
+home page, the embedded stylesheet, and `server -healthcheck`. Dependabot (`.github/dependabot.yml`) opens
+weekly update PRs for Go modules and GitHub Actions; the Tailwind CLI, daisyUI and htmx are pinned by hand
+(see `scripts/install-tools.sh` and `static/static.go`).
 
 ## Troubleshooting
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/tonymmm1/go-htmx/templates/layouts"
+	pagetemplates "github.com/tonymmm1/go-htmx/templates/pages"
 )
 
 // Render writes component as an HTML response with the given status code.
@@ -46,6 +47,14 @@ func RenderPage(w http.ResponseWriter, r *http.Request, status int, page templ.C
 		r = r.WithContext(layouts.WithContentOnly(r.Context()))
 	}
 	Render(w, r, status, page)
+}
+
+// RenderError writes the styled error page with the given 4xx/5xx status. Use
+// it when a handler fails in a way the visitor should see as a page (a failed
+// database query, for example); the panic recovery middleware uses it too.
+func RenderError(w http.ResponseWriter, r *http.Request, status int) {
+	w.Header().Set("Cache-Control", "no-store")
+	RenderPage(w, r, status, pagetemplates.Error(status))
 }
 
 // IsHTMX reports whether htmx sent the request (including boosted links).

@@ -1,0 +1,27 @@
+package pagetemplates
+
+import (
+	"github.com/tonymmm1/go-htmx/templates/layouts"
+	"strconv"
+)
+
+// Error is the page for failed requests other than 404; see pages.RenderError.
+templ Error(status int) {
+	@layouts.Layout(layouts.Meta{
+		Title:       "Something went wrong",
+		Description: "The page could not be loaded.",
+	}) {
+		<div class="hero flex-1 bg-base-200 py-16">
+			<div class="hero-content text-center">
+				<div class="max-w-md">
+					<p class="font-mono text-6xl font-bold text-error">{ strconv.Itoa(status) }</p>
+					<h1 class="mt-4 text-3xl font-bold">Something went wrong</h1>
+					<p class="py-6 text-base-content/70">
+						The page could not be loaded. Please try again in a moment.
+					</p>
+					<a href="/" class="btn btn-primary">Back to Home</a>
+				</div>
+			</div>
+		</div>
+	}
+}

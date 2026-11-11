@@ -1,6 +1,9 @@
 package layouts
 
-import "github.com/tonymmm1/go-htmx/static"
+import (
+	"github.com/tonymmm1/go-htmx/internal/site"
+	"github.com/tonymmm1/go-htmx/static"
+)
 
 // htmxConfig is read by htmx from <meta name="htmx-config">.
 //   - includeIndicatorStyles: .htmx-indicator styles live in styles/input.css
@@ -26,7 +29,7 @@ templ Layout(meta Meta) {
 		{ children... }
 	} else {
 		<!DOCTYPE html>
-		<html lang="en">
+		<html lang={ site.Lang }>
 			<head>
 				<meta charset="UTF-8"/>
 				<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -34,8 +37,22 @@ templ Layout(meta Meta) {
 				if meta.Description != "" {
 					<meta name="description" content={ meta.Description }/>
 				}
-				<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)"/>
-				<meta name="theme-color" content="#1d232a" media="(prefers-color-scheme: dark)"/>
+				if meta.URL() != "" {
+					<link rel="canonical" href={ meta.URL() }/>
+					<meta property="og:url" content={ meta.URL() }/>
+				}
+				<meta property="og:site_name" content={ site.Name }/>
+				<meta property="og:type" content="website"/>
+				<meta property="og:title" content={ meta.FullTitle() }/>
+				if meta.Description != "" {
+					<meta property="og:description" content={ meta.Description }/>
+				}
+				if meta.ImageURL() != "" {
+					<meta property="og:image" content={ meta.ImageURL() }/>
+					<meta name="twitter:card" content="summary_large_image"/>
+				}
+				<meta name="theme-color" content={ site.ThemeColorLight } media="(prefers-color-scheme: light)"/>
+				<meta name="theme-color" content={ site.ThemeColorDark } media="(prefers-color-scheme: dark)"/>
 				<meta name="htmx-config" content={ htmxConfig }/>
 				<link rel="icon" href={ static.Path("img/favicon.svg") } type="image/svg+xml"/>
 				<link rel="stylesheet" href={ static.Path("css/styles.css") }/>
@@ -46,7 +63,7 @@ templ Layout(meta Meta) {
 				<div id="page-progress" class="page-progress htmx-indicator" aria-hidden="true"></div>
 				<header class="navbar bg-base-100 shadow-lg">
 					<div class="flex-1">
-						<a class="btn btn-ghost text-xl" href="/">{ SiteName }</a>
+						<a class="btn btn-ghost text-xl" href="/">{ site.Name }</a>
 					</div>
 					<nav class="flex flex-none items-center" aria-label="Main">
 						<ul class="menu menu-horizontal px-1">
@@ -61,7 +78,7 @@ templ Layout(meta Meta) {
 					{ children... }
 				</main>
 				<footer class="footer footer-center border-t border-base-300 bg-base-200 p-10 text-base-content">
-					<p>Built with Go, HTMX, Templ, and Tailwind CSS</p>
+					<p>{ site.Footer }</p>
 				</footer>
 				<div id="toasts" class="toast toast-end z-50"></div>
 			</body>
