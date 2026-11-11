@@ -24,9 +24,9 @@
 //
 // Vendored files:
 //
-//   - js/htmx.min.js: htmx 2.0.11, copied from package/dist/htmx.min.js in
-//     https://registry.npmjs.org/htmx.org/-/htmx.org-2.0.11.tgz
-//     (sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg).
+//   - js/htmx.min.js: htmx 4.0.1, copied from package/dist/htmx.min.js in
+//     https://registry.npmjs.org/htmx.org/-/htmx.org-4.0.1.tgz
+//     (sha384-Qp9rdC8H7EqOoX+nR0P3RPG2Noji+qdwJlGpfzwQJsfOpp3sGwIdSP9xO3+UlEhn).
 //     To update, download the new version's tarball, replace the file, check
 //     it against the SRI hash published by htmx, and update the version and
 //     hash here and in static_test.go.

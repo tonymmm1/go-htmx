@@ -10,7 +10,7 @@ Read more only when the task needs it:
 | [docs/agents/architecture.md](docs/agents/architecture.md) | Changing the server, middleware, rendering, static serving or build tooling |
 | [docs/ui.md](docs/ui.md) | Styling, themes, or adding/replacing a UI library (daisyUI, shadcn-style kits) |
 
-Server-rendered Go web app: `net/http` + [templ](https://templ.guide/) + htmx 2 + Tailwind CSS 4 + daisyUI 5.
+Server-rendered Go web app: `net/http` + [templ](https://templ.guide/) + htmx 4 + Tailwind CSS 4 + daisyUI 5.
 One static binary with all assets embedded. Keep it lightweight: prefer the standard library and avoid new
 dependencies unless asked. There is no Node.js or npm: Tailwind runs as a standalone binary.
 
@@ -95,12 +95,33 @@ func (h *Handler) HandleContact(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-Fragment: return only the swapped element with `Render(w, r, http.StatusOK, components.X(...))`. htmx does not
-swap 4xx/5xx responses; app.js shows an error toast instead. To show inline validation errors, re-render the
-form with its error markup and status 200. Full examples (fragment, validated form, SSE) are in
+Fragment: return only the swapped element with `Render(w, r, http.StatusOK, components.X(...))`. A 4xx/5xx
+response to a fragment request is not swapped; app.js shows an error toast instead (see the htmx 4 notes below).
+To show inline validation errors, re-render the form with its error markup and status 200. Full examples (fragment, validated form, SSE) are in
 [docs/agents/recipes.md](docs/agents/recipes.md).
 
 Live examples, until `make strip-examples` removes them: `internal/pages/examples.go` and `templates/components/examples.templ`.
+
+## htmx 4
+
+The app uses htmx 4, which differs from the htmx 2 most examples online are written for. Check
+[four.htmx.org](https://four.htmx.org/docs/whats-new-in-htmx-4) before copying htmx code.
+
+- **Inheritance is explicit.** An attribute only applies to descendants with `:inherited`, e.g.
+  `hx-boost:inherited` and `hx-indicator:inherited` on `<body>`. `hx-target`, `hx-swap` etc. on a parent do
+  nothing for children unless they carry `:inherited`.
+- **Event names are `htmx:phase:action`**: `htmx:after:process` (was `htmx:load`), `htmx:before:swap`,
+  `htmx:response:error`, `htmx:error` (network errors, timeouts). Event data is in `event.detail.ctx`;
+  there is no `detail.xhr`, since requests use `fetch()`.
+- **Error responses swap by default in htmx 4.** app.js turns that off for fragment requests: they toast and
+  swap nothing, unless the element has a matching `hx-status:<code>` attribute, which then decides the
+  swap. HTML error pages for navigations (boosted links/forms, history restores) are swapped in.
+- **Renamed attributes:** `hx-disable` means "disable during the request" (was `hx-disabled-elt`);
+  `hx-ignore` skips htmx processing (was `hx-disable`). `hx-vars`, `hx-params`, `hx-ext`, `hx-history`
+  and `hx-disinherit` are gone.
+- **Server side:** htmx sends `HX-Request-Type: partial` for targeted swaps and `full` for body swaps
+  (boosted navigation, history restores, `hx-select`). `RenderPage` keys on it; use `pages.IsPartial(r)`
+  rather than `HX-Boosted` checks.
 
 ## Testing
 

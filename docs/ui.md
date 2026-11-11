@@ -68,12 +68,13 @@ template's constraints:
    tags, either move that code into a file or add per-request CSP nonces (`templ.WithNonce` plus a nonce in
    the CSP header in `internal/middleware`). Moving the code is simpler.
 3. **Re-initialise after htmx swaps.** Components that need JavaScript must be initialised on content htmx
-   inserts. Listen for `htmx:load`, which fires for every new element including the initial page, in
+   inserts. Listen for `htmx:after:process` (htmx 4's name for htmx 2's `htmx:load`), which fires for every
+   new element including the initial page, in
    `static/js/app.js`, and call the library's init function on the new element. For example, Basecoat
    documents `window.basecoat.initAll()`:
 
    ```js
-   document.addEventListener("htmx:load", function () {
+   document.addEventListener("htmx:after:process", function () {
      if (window.basecoat) window.basecoat.initAll();
    });
    ```

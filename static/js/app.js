@@ -32,9 +32,8 @@
     } catch (e) {}
   });
 
-  // htmx errors. By default htmx does not swap 4xx/5xx responses and fails
-  // silently, so show a toast instead. The message comes from the status code,
-  // never from the response body, and is inserted with textContent.
+  // htmx errors are reported with a toast. The message comes from the status
+  // code, never from the response body, and is inserted with textContent.
   function toast(message) {
     var container = document.getElementById("toasts");
     if (!container) return;
@@ -58,31 +57,59 @@
     }, 6000);
   }
 
-  // Boosted navigation (hx-boost links and forms) should behave like a normal
-  // page load, so an HTML error page such as the 404 is swapped in and pushed
-  // to history instead of being reported as a failed request.
-  document.addEventListener("htmx:beforeSwap", function (event) {
-    var detail = event.detail;
-    var type = detail.xhr.getResponseHeader("Content-Type") || "";
-    if (detail.boosted && detail.isError && type.indexOf("text/html") === 0) {
-      detail.shouldSwap = true;
-      detail.isError = false;
-    }
-  });
+  // handlesStatus reports whether elt declares hx-status for this status code
+  // (exact, 50x or 5xx), in which case it decides how the response is swapped.
+  function handlesStatus(elt, status) {
+    var code = String(status);
+    var patterns = [code, code.slice(0, 2) + "x", code[0] + "xx"];
+    return !!elt && patterns.some(function (pattern) {
+      return elt.hasAttribute("hx-status:" + pattern);
+    });
+  }
 
-  document.addEventListener("htmx:responseError", function (event) {
-    var status = event.detail.xhr.status;
+  // htmx 4 swaps 4xx/5xx responses like any other. Two cases are kept apart:
+  //   - Page navigations (boosted links and forms, history restores: htmx
+  //     sends HX-Request-Type: full) that receive an HTML error page, such as
+  //     the 404 page, swap it in like a normal page load.
+  //   - Everything else (fragment requests, or a plain-text error such as the
+  //     rate limiter's 429) shows a toast and swaps nothing, so a fragment
+  //     target never fills with an error body and the URL is not pushed.
+  //     Elements with a matching hx-status attribute handle the response
+  //     themselves.
+  // This listener runs before htmx applies hx-status and noSwap, and setting
+  // ctx.swap to "none" is what noSwap does internally.
+  document.addEventListener("htmx:response:error", function (event) {
+    var ctx = event.detail.ctx;
+    var status = ctx.response.status;
+    var type = ctx.response.headers.get("Content-Type") || "";
+    var navigation = ctx.request.headers["HX-Request-Type"] === "full";
+    if (navigation && type.indexOf("text/html") === 0) return;
+    if (handlesStatus(ctx.sourceElement, status)) return;
+
+    ctx.swap = "none";
+    ctx.push = false;
+    ctx.replace = false;
     toast(
       (status >= 500 ? "Something went wrong on the server" : "Request failed") +
         " (" + status + "). Please try again."
     );
   });
 
-  document.addEventListener("htmx:sendError", function () {
-    toast("Could not reach the server. Check your connection and try again.");
-  });
-
-  document.addEventListener("htmx:timeout", function () {
-    toast("The server took too long to respond. Please try again.");
+  // Network failures, timeouts (htmx 4 aborts requests after 60s by default)
+  // and swap exceptions. Intentional aborts from hx-sync don't fire this.
+  document.addEventListener("htmx:error", function (event) {
+    var detail = event.detail;
+    var error = detail.error;
+    var timedOut = error && error.name === "AbortError" &&
+      detail.ctx && detail.ctx.request.signal &&
+      detail.ctx.request.signal.reason === "timeout";
+    if (timedOut) {
+      toast("The server took too long to respond. Please try again.");
+    } else if (detail.ctx && !detail.ctx.response) {
+      // fetch() rejected, so no response arrived: the server can't be reached.
+      toast("Could not reach the server. Check your connection and try again.");
+    } else {
+      toast("Something went wrong. Please try again.");
+    }
   });
 })();

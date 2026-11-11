@@ -528,7 +528,7 @@ func TestEmbeddedAssets(t *testing.T) {
 // TestVendoredHTMXIntegrity pins the vendored htmx build to its published
 // subresource integrity hash. Update both together.
 func TestVendoredHTMXIntegrity(t *testing.T) {
-	const want = "sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg"
+	const want = "sha384-Qp9rdC8H7EqOoX+nR0P3RPG2Noji+qdwJlGpfzwQJsfOpp3sGwIdSP9xO3+UlEhn"
 
 	data, err := embedded.ReadFile("js/htmx.min.js")
 	if err != nil {
